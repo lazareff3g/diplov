@@ -1,0 +1,57 @@
+/* Общие стили */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  main {
+    flex: 1;
+  }
+  
+  /* Стили для карты */
+  .yandex-map {
+    width: 100%;
+    height: 600px;
+    margin-bottom: 20px;
+  }
+  
+  /* Стили для карточек локаций */
+  .location-card {
+    height: 100%;
+    transition: transform 0.3s;
+  }
+  
+  .location-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Стили для фильтров */
+  .filter-section {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+  
+  /* Стили для страницы деталей локации */
+  .location-detail-image {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 5px;
+  }
+  
+  /* Стили для форм */
+  .auth-form {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  
