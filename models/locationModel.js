@@ -26,8 +26,10 @@ const createLocation = async (locationData) => {
   return result.rows[0];
 };
 
-// Получение всех локаций с фильтрацией
-const getLocations = async (filters = {}) => {
+// Получение всех локаций с фильтрацией и пагинацией
+const getLocations = async (filters = {}, page = 1, limit = 10) => {
+  const offset = (page - 1) * limit;
+  
   let query = `
     SELECT l.*, 
            ST_X(l.coordinates) as longitude, 
@@ -57,13 +59,38 @@ const getLocations = async (filters = {}) => {
     conditions.push(`l.best_season = $${values.length}`);
   }
   
+  // Добавляем поиск по названию или описанию
+  if (filters.search) {
+    values.push(`%${filters.search}%`, `%${filters.search}%`);
+    conditions.push(`(l.name ILIKE $${values.length - 1} OR l.description ILIKE $${values.length})`);
+  }
+  
   if (conditions.length > 0) {
     query += ' WHERE ' + conditions.join(' AND ');
   }
   
+  // Добавляем подсчет общего количества записей
+  const countQuery = `SELECT COUNT(*) FROM (${query}) as count_query`;
+  const countResult = await pool.query(countQuery, values);
+  const total = parseInt(countResult.rows[0].count);
+  
+  // Добавляем сортировку и пагинацию
+  query += ` ORDER BY l.created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+  values.push(limit, offset);
+  
   const result = await pool.query(query, values);
-  return result.rows;
+  
+  return {
+    locations: result.rows,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    }
+  };
 };
+
 
 // Получение локации по ID
 const getLocationById = async (id) => {
@@ -169,4 +196,44 @@ module.exports = {
   getLocationById,
   updateLocation,
   deleteLocation
+};
+// Поиск ближайших локаций
+const getNearbyLocations = async (latitude, longitude, radiusInKm = 10) => {
+  // Преобразуем радиус из км в метры
+  const radiusInMeters = radiusInKm * 1000;
+  
+  const query = `
+    SELECT l.*, 
+           ST_X(l.coordinates) as longitude, 
+           ST_Y(l.coordinates) as latitude,
+           u.username as creator_username, 
+           c.name as category_name,
+           ST_Distance(
+             l.coordinates::geography, 
+             ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+           ) as distance
+    FROM locations l
+    JOIN users u ON l.created_by = u.id
+    JOIN categories c ON l.category_id = c.id
+    WHERE ST_DWithin(
+      l.coordinates::geography,
+      ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+      $3
+    )
+    ORDER BY distance
+  `;
+  
+  const values = [longitude, latitude, radiusInMeters];
+  const result = await pool.query(query, values);
+  return result.rows;
+};
+
+// Добавьте метод в экспорт
+module.exports = {
+  createLocation,
+  getLocations,
+  getLocationById,
+  updateLocation,
+  deleteLocation,
+  getNearbyLocations
 };

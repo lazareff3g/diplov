@@ -1,3 +1,4 @@
+// src/components/locations/LocationCard.js
 import React from 'react';
 import { Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
@@ -15,6 +16,11 @@ const LocationCard = ({ location }) => {
       )}
       <Card.Body>
         <Card.Title>{location.name}</Card.Title>
+        {location.category_name && (
+          <Card.Subtitle className="mb-2 text-muted">
+            {location.category_name}
+          </Card.Subtitle>
+        )}
         <Card.Text>
           {location.description && location.description.length > 100
             ? `${location.description.substring(0, 100)}...`

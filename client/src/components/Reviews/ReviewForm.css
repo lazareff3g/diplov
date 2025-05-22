@@ -1,0 +1,20 @@
+.review-form {
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.star-rating {
+  display: flex;
+  flex-direction: row;
+}
+
+.star-rating input[type="radio"] {
+  display: none;
+}
+
+.star {
+  cursor: pointer;
+  transition: color 200ms;
+  margin-right: 5px;
+}

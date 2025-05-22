@@ -1,6 +1,7 @@
 const userModel = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { pool } = require('../db'); // Добавляем импорт пула подключений
 
 exports.getUsers = async (req, res) => {
   try {
@@ -65,6 +66,14 @@ exports.loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Неверный email или пароль' });
     }
     
+    // Получаем URL изображения профиля
+    const profileImage = await pool.query(
+      'SELECT url FROM profile_images WHERE user_id = $1',
+      [user.id]
+    );
+    
+    const imageUrl = profileImage.rows.length > 0 ? profileImage.rows[0].url : null;
+    
     // Генерация токена
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: '30d'
@@ -75,9 +84,11 @@ exports.loginUser = async (req, res) => {
       username: user.username,
       email: user.email,
       role: user.role,
+      profile_picture: imageUrl, // Добавляем URL изображения профиля
       token
     });
   } catch (err) {
+    console.error('Ошибка при входе:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -89,13 +100,44 @@ exports.getUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'Пользователь не найден' });
     }
     
+    // Получаем URL изображения профиля
+    const profileImage = await pool.query(
+      'SELECT url FROM profile_images WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    const imageUrl = profileImage.rows.length > 0 ? profileImage.rows[0].url : null;
+    
     res.json({
       id: user.id,
       username: user.username,
       email: user.email,
-      role: user.role
+      role: user.role,
+      profile_picture: imageUrl // Добавляем URL изображения профиля
     });
   } catch (err) {
+    console.error('Ошибка при получении профиля:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Добавляем функцию обновления профиля
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    
+    // Обновляем данные пользователя
+    const updatedUser = await userModel.updateUser(req.user.id, username, email);
+    
+    res.json({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      message: 'Профиль успешно обновлен'
+    });
+  } catch (err) {
+    console.error('Ошибка при обновлении профиля:', err);
     res.status(500).json({ error: err.message });
   }
 };

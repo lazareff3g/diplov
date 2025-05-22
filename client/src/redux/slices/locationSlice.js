@@ -1,78 +1,107 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import locationService from '../../services/locationService';
+
+// Асинхронные действия (thunks)
+export const fetchLocations = createAsyncThunk(
+  'locations/fetchLocations',
+  async (params, { rejectWithValue }) => {
+    try {
+      const response = await locationService.getLocations(params);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const fetchLocationById = createAsyncThunk(
+  'locations/fetchLocationById',
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await locationService.getLocationById(id);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
 
 const initialState = {
-  locations: [],
-  location: null,
-  loading: false,
+  categories: [],
   error: null,
-  totalPages: 1,
+  loading: false,
+  location: null,
+  locations: [],
+  filters: {
+    search: '',
+    category_id: '',
+    best_time_of_day: '',
+    best_season: '',
+    accessibility: '',
+    difficulty_level: '',
+    permission_required: ''
+  },
   currentPage: 1,
-  filters: {}
+  totalPages: 1
 };
 
 const locationSlice = createSlice({
   name: 'locations',
   initialState,
   reducers: {
-    getLocationsStart: (state) => {
-      state.loading = true;
-      state.error = null;
-    },
-    getLocationsSuccess: (state, action) => {
-      state.loading = false;
-      state.locations = action.payload.locations || action.payload;
-      state.totalPages = action.payload.totalPages || 1;
-      state.currentPage = action.payload.currentPage || 1;
-    },
-    getLocationsFailure: (state, action) => {
-      state.loading = false;
-      state.error = action.payload;
-    },
-    getLocationStart: (state) => {
-      state.loading = true;
-      state.error = null;
-    },
-    getLocationSuccess: (state, action) => {
-      state.loading = false;
-      state.location = action.payload;
-    },
-    getLocationFailure: (state, action) => {
-      state.loading = false;
-      state.error = action.payload;
-    },
-    createLocationStart: (state) => {
-      state.loading = true;
-      state.error = null;
-    },
-    createLocationSuccess: (state, action) => {
-      state.loading = false;
-      state.locations = [action.payload, ...state.locations];
-    },
-    createLocationFailure: (state, action) => {
-      state.loading = false;
-      state.error = action.payload;
+    clearLocation: (state) => {
+      state.location = null;
     },
     setFilters: (state, action) => {
-      state.filters = action.payload;
+      state.filters = { ...state.filters, ...action.payload };
     },
     clearFilters: (state) => {
-      state.filters = {};
+      state.filters = initialState.filters;
+    },
+    setCurrentPage: (state, action) => {
+      state.currentPage = action.payload;
+    },
+    setTotalPages: (state, action) => {
+      state.totalPages = action.payload;
     }
+  },
+  extraReducers: (builder) => {
+    builder
+      // Обработка fetchLocations
+      .addCase(fetchLocations.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchLocations.fulfilled, (state, action) => {
+        state.loading = false;
+        state.locations = action.payload;
+      })
+      .addCase(fetchLocations.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      })
+      // Обработка fetchLocationById
+      .addCase(fetchLocationById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchLocationById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.location = action.payload;
+      })
+      .addCase(fetchLocationById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message;
+      });
   }
 });
 
-export const {
-  getLocationsStart,
-  getLocationsSuccess,
-  getLocationsFailure,
-  getLocationStart,
-  getLocationSuccess,
-  getLocationFailure,
-  createLocationStart,
-  createLocationSuccess,
-  createLocationFailure,
-  setFilters,
-  clearFilters
+export const { 
+  clearLocation, 
+  setFilters, 
+  clearFilters,
+  setCurrentPage,
+  setTotalPages
 } = locationSlice.actions;
 
 export default locationSlice.reducer;

@@ -1,0 +1,60 @@
+.location-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.location-header h1 {
+  margin-bottom: 0.5rem;
+}
+
+.location-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  .location-actions {
+    margin-top: 0;
+  }
+}
+
+.location-description {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-line;
+}
+
+.location-details {
+  margin-top: 1rem;
+}
+
+.detail-item {
+  margin-bottom: 0.75rem;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #555;
+  margin-right: 0.5rem;
+}
+
+.detail-value {
+  color: #333;
+}
+
+.rating-badge {
+  display: flex;
+  align-items: center;
+  background-color: #f8f9fa;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+}
+
+.rating-badge svg {
+  margin-right: 0.25rem;
+}

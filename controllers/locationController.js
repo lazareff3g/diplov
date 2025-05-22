@@ -8,7 +8,10 @@ exports.getLocations = async (req, res) => {
       best_season,
       accessibility,
       difficulty_level,
-      permission_required
+      permission_required,
+      search,
+      page = 1,
+      limit = 10
     } = req.query;
     
     // Создаем объект фильтров
@@ -20,11 +23,12 @@ exports.getLocations = async (req, res) => {
     if (accessibility) filters.accessibility = accessibility;
     if (difficulty_level) filters.difficulty_level = difficulty_level;
     if (permission_required !== undefined) filters.permission_required = permission_required === 'true';
+    if (search) filters.search = search;
     
-    // Получаем локации с применением фильтров
-    const locations = await locationModel.getLocations(filters);
+    // Получаем локации с применением фильтров и пагинации
+    const result = await locationModel.getLocations(filters, parseInt(page), parseInt(limit));
     
-    res.json(locations);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ message: 'Ошибка при получении локаций', error: err.message });
   }
@@ -126,5 +130,27 @@ exports.deleteLocation = async (req, res) => {
     res.json({ message: 'Локация успешно удалена' });
   } catch (err) {
     res.status(500).json({ message: 'Ошибка при удалении локации', error: err.message });
+  }
+};
+
+// Новая функция для получения ближайших локаций
+exports.getNearbyLocations = async (req, res) => {
+  try {
+    const { latitude, longitude, radius = 10 } = req.query;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({ message: 'Необходимо указать широту и долготу' });
+    }
+    
+    const locations = await locationModel.getNearbyLocations(
+      parseFloat(latitude), 
+      parseFloat(longitude), 
+      parseFloat(radius)
+    );
+    
+    res.json(locations);
+  } catch (err) {
+    console.error('Ошибка при получении ближайших локаций:', err);
+    res.status(500).json({ message: 'Ошибка при получении ближайших локаций', error: err.message });
   }
 };

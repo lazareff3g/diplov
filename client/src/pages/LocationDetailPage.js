@@ -1,192 +1,284 @@
-import React, { useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { Container, Row, Col, Card, Badge, Button, Alert } from 'react-bootstrap';
+// src/pages/LocationDetailPage.js
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { Container, Row, Col, Button, Alert, Spinner } from 'react-bootstrap';
+import { FaHeart, FaRegHeart, FaEdit, FaTrash, FaMapMarkerAlt } from 'react-icons/fa';
 import { YMaps, Map, Placemark } from '@pbe/react-yandex-maps';
-import { getLocationStart, getLocationSuccess, getLocationFailure } from '../redux/slices/locationSlice';
-import locationService from '../services/locationService';
+import { fetchLocationById } from '../redux/slices/locationSlice';
+import api from '../services/api';
+import PhotoGallery from '../components/Photos/PhotoGallery';
+import ReviewForm from '../components/Reviews/ReviewForm';
+import ReviewList from '../components/Reviews/ReviewList';
 
 const LocationDetailPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
+  
+  const { user, isAuthenticated } = useSelector(state => state.auth);
   const { location, loading, error } = useSelector(state => state.locations);
-  const { isAuthenticated, user } = useSelector(state => state.auth);
-
+  
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [activeTab, setActiveTab] = useState('info');
+  
+  // Загружаем данные локации при монтировании компонента
   useEffect(() => {
     const fetchLocation = async () => {
       try {
-        dispatch(getLocationStart());
-        const data = await locationService.getLocationById(id);
-        dispatch(getLocationSuccess(data));
+        dispatch(fetchLocationById(id));
       } catch (err) {
-        dispatch(getLocationFailure(err.response?.data?.message || 'Ошибка при загрузке локации'));
+        dispatch({ 
+          type: 'locations/fetchLocationById/rejected', 
+          error: { message: err.response?.data?.message || 'Ошибка при загрузке локации' }
+        });
       }
     };
-
+    
     fetchLocation();
-  }, [id, dispatch]);
-
-  // Функция для преобразования значений в читаемый вид
-  const formatValue = (key, value) => {
-    const formats = {
-      best_time_of_day: {
-        morning: 'Утро',
-        afternoon: 'День',
-        evening: 'Вечер',
-        night: 'Ночь'
-      },
-      best_season: {
-        spring: 'Весна',
-        summer: 'Лето',
-        autumn: 'Осень',
-        winter: 'Зима',
-        any: 'Любой сезон'
-      },
-      accessibility: {
-        public_transport: 'Общественный транспорт',
-        car: 'Автомобиль',
-        walking: 'Пешком',
-        mixed: 'Смешанный'
-      },
-      difficulty_level: {
-        easy: 'Легкий',
-        medium: 'Средний',
-        hard: 'Сложный'
+  }, [dispatch, id]);
+  
+  // Проверяем, добавлена ли локация в избранное
+  useEffect(() => {
+    const checkIsFavorite = async () => {
+      if (isAuthenticated && location) {
+        try {
+          const response = await api.get(`/favorites/check/${location.id}`);
+          setIsFavorite(response.data.isFavorite);
+        } catch (err) {
+          console.error('Ошибка при проверке избранного:', err);
+        }
       }
     };
-
-    return formats[key] ? formats[key][value] || value : value;
+    
+    checkIsFavorite();
+  }, [isAuthenticated, location]);
+  
+  // Обработчик добавления/удаления из избранного
+  const handleFavoriteToggle = async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    try {
+      if (isFavorite) {
+        await api.delete(`/favorites/${location.id}`);
+      } else {
+        await api.post('/favorites', { location_id: location.id });
+      }
+      setIsFavorite(!isFavorite);
+    } catch (err) {
+      console.error('Ошибка при обновлении избранного:', err);
+    }
   };
-
+  
+  // Обработчик удаления локации
+  const handleDelete = async () => {
+    if (window.confirm('Вы уверены, что хотите удалить эту локацию?')) {
+      try {
+        await api.delete(`/locations/${id}`);
+        navigate('/locations');
+      } catch (err) {
+        console.error('Ошибка при удалении локации:', err);
+      }
+    }
+  };
+  
+  // Если идет загрузка данных локации
   if (loading) {
     return (
-      <Container>
-        <Alert variant="info">Загрузка информации о локации...</Alert>
+      <Container className="py-5 text-center">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Загрузка...</span>
+        </Spinner>
       </Container>
     );
   }
-
+  
+  // Если произошла ошибка при загрузке данных локации
   if (error) {
     return (
-      <Container>
-        <Alert variant="danger">{error}</Alert>
+      <Container className="py-5">
+        <Alert variant="danger">
+          {error}
+        </Alert>
       </Container>
     );
   }
-
+  
+  // Если данные локации не найдены
   if (!location) {
     return (
-      <Container>
-        <Alert variant="warning">Локация не найдена</Alert>
+      <Container className="py-5">
+        <Alert variant="warning">
+          Локация не найдена
+        </Alert>
       </Container>
     );
   }
-
+  
+  // Проверяем, является ли текущий пользователь владельцем локации
   const isOwner = isAuthenticated && user && location.created_by === user.id;
-
+  
   return (
-    <Container>
+    <Container className="py-5">
       <Row className="mb-4">
         <Col>
           <h1>{location.name}</h1>
-          <div className="mb-3">
-            <Badge bg="secondary" className="me-2">{location.category_name}</Badge>
-            {location.best_time_of_day && (
-              <Badge bg="info" className="me-2">{formatValue('best_time_of_day', location.best_time_of_day)}</Badge>
-            )}
-            {location.best_season && (
-              <Badge bg="success" className="me-2">{formatValue('best_season', location.best_season)}</Badge>
-            )}
-          </div>
+          <p className="text-muted">
+            Добавил: {location.creator_username}
+          </p>
         </Col>
-      </Row>
-
-      <Row className="mb-4">
-        <Col md={8}>
-          <Card className="mb-4">
-            <Card.Body>
-              <Card.Title>Описание</Card.Title>
-              <Card.Text>{location.description}</Card.Text>
-            </Card.Body>
-          </Card>
-
-          <Card className="mb-4">
-            <Card.Body>
-              <Card.Title>Информация</Card.Title>
-              <Row>
-                <Col md={6}>
-                  <p><strong>Адрес:</strong> {location.address}</p>
-                  {location.accessibility && (
-                    <p><strong>Доступность:</strong> {formatValue('accessibility', location.accessibility)}</p>
-                  )}
-                  {location.difficulty_level && (
-                    <p><strong>Сложность:</strong> {formatValue('difficulty_level', location.difficulty_level)}</p>
-                  )}
-                </Col>
-                <Col md={6}>
-                  {location.best_time_of_day && (
-                    <p><strong>Лучшее время:</strong> {formatValue('best_time_of_day', location.best_time_of_day)}</p>
-                  )}
-                  {location.best_season && (
-                    <p><strong>Лучший сезон:</strong> {formatValue('best_season', location.best_season)}</p>
-                  )}
-                  <p>
-                    <strong>Требуется разрешение:</strong> {location.permission_required ? 'Да' : 'Нет'}
-                  </p>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
-        </Col>
-
-        <Col md={4}>
-          <Card className="mb-4">
-            <Card.Body>
-              <Card.Title>Местоположение</Card.Title>
-              <YMaps query={{ apikey: process.env.REACT_APP_YANDEX_MAPS_API_KEY }}>
-                <Map
-                  state={{
-                    center: [location.latitude || 55.751244, location.longitude || 37.618423],
-                    zoom: 15
-                  }}
-                  width="100%"
-                  height="300px"
-                >
-                  <Placemark
-                    geometry={[location.latitude || 55.751244, location.longitude || 37.618423]}
-                    options={{ preset: 'islands#violetIcon' }}
-                  />
-                </Map>
-              </YMaps>
-            </Card.Body>
-          </Card>
-
-          <Card className="mb-4">
-            <Card.Body>
-              <Card.Title>Автор</Card.Title>
-              <Card.Text>{location.creator_username}</Card.Text>
-              <Card.Text className="text-muted">
-                Добавлено: {new Date(location.created_at).toLocaleDateString()}
-              </Card.Text>
-            </Card.Body>
-          </Card>
-
+        <Col xs="auto" className="d-flex align-items-center">
+          {isAuthenticated ? (
+            <Button 
+              variant="outline-danger" 
+              className="me-2"
+              onClick={handleFavoriteToggle}
+            >
+              {isFavorite ? <FaHeart /> : <FaRegHeart />} {isFavorite ? 'В избранном' : 'В избранное'}
+            </Button>
+          ) : (
+            <Button variant="outline-secondary" disabled>
+              <FaRegHeart /> Войдите, чтобы добавить в избранное
+            </Button>
+          )}
+          
           {isOwner && (
-            <div className="d-grid gap-2">
-              <Link to={`/locations/${location.id}/edit`}>
-                <Button variant="warning" className="w-100 mb-2">Редактировать</Button>
-              </Link>
-              <Button variant="danger" className="w-100">Удалить</Button>
-            </div>
+            <>
+              <Button 
+                variant="outline-primary" 
+                className="me-2"
+                onClick={() => navigate(`/locations/${id}/edit`)}
+              >
+                <FaEdit /> Редактировать
+              </Button>
+              <Button 
+                variant="outline-danger"
+                onClick={handleDelete}
+              >
+                <FaTrash /> Удалить
+              </Button>
+            </>
           )}
         </Col>
       </Row>
-
-      <Row>
+      
+      <Row className="mb-4">
+        <Col md={6}>
+          <img 
+            src={location.image_url || '/placeholder-image.jpg'} 
+            alt={location.name}
+            className="img-fluid rounded"
+            style={{ width: '100%', height: '400px', objectFit: 'cover' }}
+          />
+        </Col>
+        <Col md={6}>
+          <YMaps>
+            <div className="map-container" style={{ height: '400px' }}>
+              <Map
+                defaultState={{ 
+                  center: [location.latitude, location.longitude], 
+                  zoom: 15 
+                }}
+                width="100%"
+                height="100%"
+              >
+                <Placemark geometry={[location.latitude, location.longitude]} />
+              </Map>
+            </div>
+          </YMaps>
+        </Col>
+      </Row>
+      
+      <Row className="mb-4">
         <Col>
-          <Link to="/locations">
-            <Button variant="secondary">&larr; Назад к списку локаций</Button>
-          </Link>
+          <div className="location-info">
+            <p><FaMapMarkerAlt /> {location.city}, {location.address}</p>
+            <p><strong>Категория:</strong> {location.category_name}</p>
+            {location.best_time_of_day && (
+              <p><strong>Лучшее время суток:</strong> {location.best_time_of_day}</p>
+            )}
+            {location.best_season && (
+              <p><strong>Лучший сезон:</strong> {location.best_season}</p>
+            )}
+            {location.accessibility && (
+              <p><strong>Доступность:</strong> {location.accessibility}</p>
+            )}
+            {location.difficulty_level && (
+              <p><strong>Уровень сложности:</strong> {location.difficulty_level}</p>
+            )}
+            <p><strong>Требуется разрешение:</strong> {location.permission_required ? 'Да' : 'Нет'}</p>
+          </div>
+        </Col>
+      </Row>
+      
+      <Row className="mb-4">
+        <Col>
+          <ul className="nav nav-tabs">
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${activeTab === 'info' ? 'active' : ''}`}
+                onClick={() => setActiveTab('info')}
+              >
+                Информация
+              </button>
+            </li>
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${activeTab === 'photos' ? 'active' : ''}`}
+                onClick={() => setActiveTab('photos')}
+              >
+                Фотографии
+              </button>
+            </li>
+            <li className="nav-item">
+              <button 
+                className={`nav-link ${activeTab === 'reviews' ? 'active' : ''}`}
+                onClick={() => setActiveTab('reviews')}
+              >
+                Отзывы
+              </button>
+            </li>
+          </ul>
+          
+          <div className="tab-content mt-3">
+            {activeTab === 'info' && (
+              <div className="tab-pane active">
+                <h3>Описание</h3>
+                <p>{location.description}</p>
+              </div>
+            )}
+            
+            {activeTab === 'photos' && (
+              <div className="tab-pane active">
+                <h3>Фотографии</h3>
+                {isAuthenticated ? (
+                  <PhotoGallery locationId={location.id} />
+                ) : (
+                  <Alert variant="info">
+                    Войдите, чтобы добавлять и просматривать фотографии
+                  </Alert>
+                )}
+              </div>
+            )}
+            
+            {activeTab === 'reviews' && (
+              <div className="tab-pane active">
+                <h3>Отзывы</h3>
+                {isAuthenticated ? (
+                  <>
+                    <ReviewForm locationId={location.id} />
+                    <ReviewList locationId={location.id} />
+                  </>
+                ) : (
+                  <Alert variant="info">
+                    Войдите, чтобы добавлять и просматривать отзывы
+                  </Alert>
+                )}
+              </div>
+            )}
+          </div>
         </Col>
       </Row>
     </Container>

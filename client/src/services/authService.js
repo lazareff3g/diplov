@@ -7,6 +7,11 @@ const register = async (userData) => {
   if (response.data && response.data.token) {
     localStorage.setItem('token', response.data.token);
     api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+    
+    // Сохраняем данные пользователя
+    if (response.data.profile_picture) {
+      localStorage.setItem('profileImage', response.data.profile_picture);
+    }
   }
   
   return response.data;
@@ -19,6 +24,11 @@ const login = async (userData) => {
   if (response.data && response.data.token) {
     localStorage.setItem('token', response.data.token);
     api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+    
+    // Сохраняем данные пользователя
+    if (response.data.profile_picture) {
+      localStorage.setItem('profileImage', response.data.profile_picture);
+    }
   }
   
   return response.data;
@@ -26,7 +36,13 @@ const login = async (userData) => {
 
 // Выход пользователя
 const logout = () => {
+  // Очищаем все данные пользователя из localStorage
   localStorage.removeItem('token');
+  localStorage.removeItem('profileImage');
+  localStorage.removeItem('userData');
+  localStorage.removeItem('userID');
+  
+  // Удаляем заголовок авторизации
   delete api.defaults.headers.common['Authorization'];
 };
 
@@ -40,6 +56,12 @@ const getCurrentUser = async () => {
   
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   const response = await api.get('/users/profile');
+  
+  // Обновляем изображение профиля в localStorage, если оно получено с сервера
+  if (response.data && response.data.profile_picture) {
+    localStorage.setItem('profileImage', response.data.profile_picture);
+  }
+  
   return response.data;
 };
 

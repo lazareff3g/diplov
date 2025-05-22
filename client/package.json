@@ -5,8 +5,6 @@
   "dependencies": {
     "@pbe/react-yandex-maps": "^1.2.5",
     "@reduxjs/toolkit": "^2.8.1",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.6.8",
     "bootstrap": "^5.3.3",
@@ -14,6 +12,7 @@
     "react": "^18.2.0",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^18.2.0",
+    "react-dropzone": "^14.3.8",
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.6.0",
     "react-scripts": "5.0.1",
@@ -25,9 +24,11 @@
     "start": "set NODE_NO_WARNINGS=1 && react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:watch": "react-scripts test --watchAll",
+    "test:coverage": "react-scripts test --coverage",
     "eject": "react-scripts eject"
   },
-  "proxy": "http://localhost:5000/",
+  "proxy": "http://127.0.0.1:5000",
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -47,9 +48,30 @@
     ]
   },
   "devDependencies": {
-    "http-proxy-node16": "^1.0.6"
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "http-proxy-node16": "^1.0.6",
+    "identity-obj-proxy": "^3.0.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "react-test-renderer": "^18.2.0",
+    "redux-mock-store": "^1.5.5"
   },
   "resolutions": {
     "http-proxy": "npm:http-proxy-node16@^1.0.6"
+  },
+  "jest": {
+    "transformIgnorePatterns": [
+      "node_modules/(?!(axios|react-router-dom|react-icons)/)"
+    ],
+    "moduleNameMapper": {
+      "\\.(css|less|scss|sass)$": "identity-obj-proxy",
+      "^src/(.*)$": "<rootDir>/src/$1",
+      "^services/(.*)$": "<rootDir>/src/services/$1"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx}",
+      "!src/index.js",
+      "!src/reportWebVitals.js"
+    ]
   }
 }

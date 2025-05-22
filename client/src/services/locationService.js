@@ -1,13 +1,19 @@
 import api from './api';
 
-// Получение всех локаций с фильтрацией
-export const getLocations = async (filters = {}) => {
+// Получение всех локаций с фильтрацией и пагинацией
+export const getLocations = async (filters = {}, page = 1, limit = 10) => {
   const params = new URLSearchParams();
+  
+  // Добавляем параметры фильтрации
   Object.entries(filters).forEach(([key, value]) => {
     if (value) {
       params.append(key, value);
     }
   });
+  
+  // Добавляем параметры пагинации
+  params.append('page', page);
+  params.append('limit', limit);
   
   const response = await api.get(`/locations?${params.toString()}`);
   return response.data;
@@ -37,12 +43,28 @@ export const deleteLocation = async (id) => {
   return response.data;
 };
 
+// Получение локаций пользователя
+export const getUserLocations = async (userId) => {
+  const response = await api.get(`/locations/user/${userId}`);
+  return response.data;
+};
+
+// Получение ближайших локаций
+export const getNearbyLocations = async (latitude, longitude, radius = 10) => {
+  const response = await api.get('/nearby-locations', {
+    params: { latitude, longitude, radius }
+  });
+  return response.data;
+};
+
 const locationService = {
   getLocations,
   getLocationById,
   createLocation,
   updateLocation,
-  deleteLocation
+  deleteLocation,
+  getUserLocations,
+  getNearbyLocations
 };
 
 export default locationService;

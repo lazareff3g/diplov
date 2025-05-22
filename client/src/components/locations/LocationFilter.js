@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Form, Button, Card, Row, Col } from 'react-bootstrap';
+import { Form, Button, Card, Row, Col, InputGroup } from 'react-bootstrap';
 import { setFilters, clearFilters } from '../../redux/slices/locationSlice';
 import api from '../../services/api';
 
@@ -15,7 +15,8 @@ const LocationFilter = () => {
     best_season: '',
     accessibility: '',
     difficulty_level: '',
-    permission_required: ''
+    permission_required: '',
+    search: ''
   });
 
   // Загрузка категорий при монтировании компонента
@@ -40,7 +41,8 @@ const LocationFilter = () => {
       best_season: currentFilters.best_season || '',
       accessibility: currentFilters.accessibility || '',
       difficulty_level: currentFilters.difficulty_level || '',
-      permission_required: currentFilters.permission_required || ''
+      permission_required: currentFilters.permission_required || '',
+      search: currentFilters.search || ''
     });
   }, [currentFilters]);
 
@@ -64,7 +66,8 @@ const LocationFilter = () => {
       best_season: '',
       accessibility: '',
       difficulty_level: '',
-      permission_required: ''
+      permission_required: '',
+      search: ''
     });
     dispatch(clearFilters());
   };
@@ -74,6 +77,19 @@ const LocationFilter = () => {
       <Card.Header>Фильтры</Card.Header>
       <Card.Body>
         <Form onSubmit={handleSubmit}>
+          <Form.Group className="mb-3">
+            <Form.Label>Поиск</Form.Label>
+            <InputGroup>
+              <Form.Control
+                type="text"
+                name="search"
+                placeholder="Поиск по названию или описанию"
+                value={localFilters.search}
+                onChange={handleChange}
+              />
+            </InputGroup>
+          </Form.Group>
+          
           <Row>
             <Col md={6} lg={4}>
               <Form.Group className="mb-3">

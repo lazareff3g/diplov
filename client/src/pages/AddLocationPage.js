@@ -6,6 +6,7 @@ import { YMaps, Map, Placemark, SearchControl } from '@pbe/react-yandex-maps';
 import { createLocationStart, createLocationSuccess, createLocationFailure } from '../redux/slices/locationSlice';
 import locationService from '../services/locationService';
 import api from '../services/api';
+import './AddLocationPage.css';
 
 const AddLocationPage = () => {
   const dispatch = useDispatch();
@@ -72,7 +73,7 @@ const AddLocationPage = () => {
       
       setFormData(prev => ({
         ...prev,
-        coordinates: [coords[0], coords[1]], // [latitude, longitude]
+        coordinates: coords, // [latitude, longitude]
         address
       }));
       
@@ -131,7 +132,6 @@ const AddLocationPage = () => {
       <h1 className="mb-4">Добавление новой локации</h1>
       
       {error && <Alert variant="danger">{error}</Alert>}
-      
       <Form noValidate validated={validated} onSubmit={handleSubmit}>
         <Card className="mb-4">
           <Card.Header>Основная информация</Card.Header>
@@ -147,10 +147,14 @@ const AddLocationPage = () => {
                     onChange={handleChange}
                     required
                     placeholder="Введите название локации"
+                    title="Введите название места для фотографии"
                   />
                   <Form.Control.Feedback type="invalid">
                     Пожалуйста, введите название локации.
                   </Form.Control.Feedback>
+                  <Form.Text className="text-muted">
+                    Укажите точное и информативное название места
+                  </Form.Text>
                 </Form.Group>
               </Col>
               
@@ -162,10 +166,11 @@ const AddLocationPage = () => {
                     value={formData.category_id}
                     onChange={handleChange}
                     required
+                    title="Выберите категорию, к которой относится место"
                   >
                     <option value="">Выберите категорию</option>
                     {categories.map(category => (
-                      <option key={category.id} value={category.id}>
+                      <option key={category.id} value={category.id} title={category.name}>
                         {category.name}
                       </option>
                     ))}
@@ -187,10 +192,14 @@ const AddLocationPage = () => {
                 onChange={handleChange}
                 required
                 placeholder="Введите описание локации"
+                title="Подробно опишите место, его особенности и рекомендации для фотографов"
               />
               <Form.Control.Feedback type="invalid">
                 Пожалуйста, введите описание локации.
               </Form.Control.Feedback>
+              <Form.Text className="text-muted">
+                Опишите особенности места, что можно фотографировать, какие ракурсы лучше использовать
+              </Form.Text>
             </Form.Group>
           </Card.Body>
         </Card>
@@ -209,14 +218,18 @@ const AddLocationPage = () => {
                   required
                   placeholder="Введите адрес"
                   className="me-2"
+                  title="Введите точный адрес места или ближайший ориентир"
                 />
-                <Button variant="outline-primary" onClick={handleAddressSearch}>
+                <Button variant="outline-primary" onClick={handleAddressSearch} title="Найти введенный адрес на карте">
                   Найти
                 </Button>
               </div>
               <Form.Control.Feedback type="invalid">
                 Пожалуйста, введите адрес.
               </Form.Control.Feedback>
+              <Form.Text className="text-muted">
+                Укажите точный адрес или ближайший ориентир
+              </Form.Text>
             </Form.Group>
             
             <div className="mb-3">
@@ -232,7 +245,19 @@ const AddLocationPage = () => {
                   {formData.coordinates && (
                     <Placemark
                       geometry={formData.coordinates}
-                      options={{ preset: 'islands#redIcon' }}
+                      options={{ preset: 'islands#redIcon', draggable: true }}
+                      onDragEnd={e => {
+                        const coords = e.get('target').geometry.getCoordinates();
+                        setFormData(prev => ({ ...prev, coordinates: coords }));
+                        
+                        // Обновление адреса при перетаскивании метки
+                        e.originalEvent.map.geocode(coords).then((res) => {
+                          const firstGeoObject = res.geoObjects.get(0);
+                          const address = firstGeoObject.getAddressLine();
+                          setFormData(prev => ({ ...prev, address }));
+                        });
+                      }}
+                      title="Перетащите метку для уточнения местоположения"
                     />
                   )}
                 </Map>
@@ -242,6 +267,14 @@ const AddLocationPage = () => {
                   Пожалуйста, выберите местоположение на карте.
                 </div>
               )}
+              {formData.coordinates && (
+                <div className="mt-2 coordinates-display">
+                  <strong>Координаты:</strong> Широта: {formData.coordinates[0].toFixed(6)}, Долгота: {formData.coordinates[1].toFixed(6)}
+                </div>
+              )}
+              <Form.Text className="text-muted">
+                Кликните на карте, чтобы указать точное местоположение, или перетащите метку для уточнения
+              </Form.Text>
             </div>
           </Card.Body>
         </Card>
@@ -257,17 +290,17 @@ const AddLocationPage = () => {
                     name="best_time_of_day"
                     value={formData.best_time_of_day}
                     onChange={handleChange}
-                    required
+                    title="Выберите оптимальное время суток для фотосъемки (необязательно)"
                   >
-                    <option value="">Выберите время суток</option>
+                    <option value="">Не указано</option>
                     <option value="morning">Утро</option>
                     <option value="afternoon">День</option>
                     <option value="evening">Вечер</option>
                     <option value="night">Ночь</option>
                   </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    Пожалуйста, выберите лучшее время суток.
-                  </Form.Control.Feedback>
+                  <Form.Text className="text-muted">
+                    Необязательное поле. Укажите, в какое время суток место выглядит наиболее выигрышно
+                  </Form.Text>
                 </Form.Group>
               </Col>
               
@@ -278,18 +311,18 @@ const AddLocationPage = () => {
                     name="best_season"
                     value={formData.best_season}
                     onChange={handleChange}
-                    required
+                    title="Выберите оптимальный сезон для фотосъемки (необязательно)"
                   >
-                    <option value="">Выберите сезон</option>
+                    <option value="">Не указано</option>
                     <option value="spring">Весна</option>
                     <option value="summer">Лето</option>
                     <option value="autumn">Осень</option>
                     <option value="winter">Зима</option>
                     <option value="any">Любой сезон</option>
                   </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    Пожалуйста, выберите лучший сезон.
-                  </Form.Control.Feedback>
+                  <Form.Text className="text-muted">
+                    Необязательное поле. Укажите, в какое время года место выглядит наиболее выигрышно
+                  </Form.Text>
                 </Form.Group>
               </Col>
             </Row>
@@ -303,6 +336,7 @@ const AddLocationPage = () => {
                     value={formData.accessibility}
                     onChange={handleChange}
                     required
+                    title="Выберите способ добраться до места"
                   >
                     <option value="">Выберите тип доступности</option>
                     <option value="public_transport">Общественный транспорт</option>
@@ -324,6 +358,7 @@ const AddLocationPage = () => {
                     value={formData.difficulty_level}
                     onChange={handleChange}
                     required
+                    title="Выберите уровень сложности доступа к месту"
                   >
                     <option value="">Выберите уровень сложности</option>
                     <option value="easy">Легкий</option>
@@ -344,7 +379,11 @@ const AddLocationPage = () => {
                 label="Требуется разрешение для съемки"
                 checked={formData.permission_required}
                 onChange={handleChange}
+                title="Отметьте, если для фотосъемки в этом месте требуется получить разрешение"
               />
+              <Form.Text className="text-muted">
+                Отметьте, если для фотосъемки в этом месте требуется получить разрешение от владельцев или администрации
+              </Form.Text>
             </Form.Group>
           </Card.Body>
         </Card>

@@ -63,3 +63,18 @@ app.listen(PORT, () => {
 
 const categoryRoutes = require('./routes/categoryRoutes');
 app.use('/api/categories', categoryRoutes);
+
+
+
+// Импорт маршрутов
+const apiRoutes = require('./routes/api');
+
+
+
+// Использование маршрутов
+app.use('/api', apiRoutes);
+
+// Статические файлы для загруженных изображений
+app.use('/uploads', express.static('uploads'));
+
+

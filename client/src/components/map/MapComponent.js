@@ -1,8 +1,9 @@
+// src/components/map/MapComponent.js
 import React, { useState, useEffect } from 'react';
 import { YMaps, Map, Placemark } from '@pbe/react-yandex-maps';
 import { Alert } from 'react-bootstrap';
 
-const MapComponent = ({ locations, loading, onLocationSelect }) => {
+const MapComponent = ({ locations = [], loading = false, onLocationSelect = () => {} }) => {
   const [mapInstance, setMapInstance] = useState(null);
   const [error, setError] = useState(null);
 
@@ -18,7 +19,9 @@ const MapComponent = ({ locations, loading, onLocationSelect }) => {
     
     // Обновляем размер карты после загрузки
     setTimeout(() => {
-      window.dispatchEvent(new Event('resize'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('resize'));
+      }
     }, 500);
   };
 

@@ -1,0 +1,137 @@
+Ñòðóêòóðà ïàïîê òîìà Windows
+Ñåðèéíûé íîìåð òîìà: F2CC-E4CF
+C:\USERS\EGORL\ONEDRIVE\ÐÀÁÎ×ÈÉ ÑÒÎË\DIPLOV\CLIENT\SRC
+¦   App.css
+¦   App.js
+¦   App.test.js
+¦   index.css
+¦   index.js
+¦   logo.svg
+¦   reportWebVitals.js
+¦   setupTests.js
+¦   
++---assets
+¦   L---css
+¦           style.css
+¦           
++---components
+¦   +---auth
+¦   ¦       Login.js
+¦   ¦       Register.js
+¦   ¦       
+¦   +---common
+¦   ¦   ¦   Pagination.js
+¦   ¦   ¦   PrivateRoute.js
+¦   ¦   ¦   
+¦   ¦   L---__tests__
+¦   ¦           Pagination.test.js
+¦   ¦           PrivateRoute.test.js
+¦   ¦           
+¦   +---layout
+¦   ¦   ¦   Footer.js
+¦   ¦   ¦   Header.js
+¦   ¦   ¦   
+¦   ¦   L---__tests__
+¦   ¦           Footer.test.js
+¦   ¦           Header.test.js
+¦   ¦           
+¦   +---locations
+¦   ¦   ¦   LocationCard.js
+¦   ¦   ¦   LocationFilter.css
+¦   ¦   ¦   LocationFilter.js
+¦   ¦   ¦   LocationItem.js
+¦   ¦   ¦   LocationList.css
+¦   ¦   ¦   LocationList.js
+¦   ¦   ¦   
+¦   ¦   +---__mocks__
+¦   ¦   ¦       LocationCard.js
+¦   ¦   ¦       
+¦   ¦   L---__tests__
+¦   ¦           LocationCard.test.js
+¦   ¦           LocationFilter.test.js
+¦   ¦           LocationItem.test.js
+¦   ¦           LocationList.test.js
+¦   ¦           
+¦   +---map
+¦   ¦       LocationMap.css
+¦   ¦       LocationMap.js
+¦   ¦       MapComponent.js
+¦   ¦       
+¦   +---Photos
+¦   ¦       PhotoGallery.css
+¦   ¦       PhotoGallery.js
+¦   ¦       
+¦   L---Reviews
+¦       ¦   ReviewForm.css
+¦       ¦   ReviewForm.js
+¦       ¦   ReviewList.css
+¦       ¦   ReviewList.js
+¦       ¦   
+¦       L---__tests__
+¦               ReviewForm.test.js
+¦               ReviewList.test.js
+¦               
++---pages
+¦   ¦   AddLocationPage.css
+¦   ¦   AddLocationPage.js
+¦   ¦   EditLocationPage.css
+¦   ¦   EditLocationPage.js
+¦   ¦   FavoritesPage.css
+¦   ¦   FavoritesPage.js
+¦   ¦   HomePage.js
+¦   ¦   LocationDetailPage.css
+¦   ¦   LocationDetailPage.js
+¦   ¦   LocationsPage.js
+¦   ¦   LoginPage.js
+¦   ¦   NearbyLocationsPage.css
+¦   ¦   NearbyLocationsPage.js
+¦   ¦   ProfilePage.css
+¦   ¦   ProfilePage.js
+¦   ¦   RegisterPage.js
+¦   ¦   
+¦   L---__tests__
+¦           EditLocationPage.test.js
+¦           HomePage.test.js
+¦           LocationDetailPage.test.js
+¦           
++---redux
+¦   ¦   store.js
+¦   ¦   
+¦   +---slices
+¦   ¦       authSlice.js
+¦   ¦       locationSlice.js
+¦   ¦       uiSlice.js
+¦   ¦       
+¦   L---__tests__
+¦           authSlice.test.js
+¦           locationActions.test.js
+¦           locationSlice.test.js
+¦           
++---services
+¦   ¦   api.js
+¦   ¦   authService.js
+¦   ¦   favoriteService.js
+¦   ¦   locationService.js
+¦   ¦   photoService.js
+¦   ¦   reviewService.js
+¦   ¦   
+¦   L---__tests__
+¦           api.test.js
+¦           locationService.test.js
+¦           
++---__mocks__
+¦   ¦   fileMock.js
+¦   ¦   react-router-dom.js
+¦   ¦   styleMock.js
+¦   ¦   
+¦   L---react-icons
+¦       L---fa
+¦               index.js
+¦               
+L---__tests__
+    L---integration
+            AddLocationPage.test.js
+            FilterLocationsFlow.test.js
+            LocationsFlow.test.js
+            ReviewFlow.test.js
+            
