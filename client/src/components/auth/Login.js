@@ -1,111 +1,87 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { Form, Button, Card, Alert } from 'react-bootstrap';
-import { loginStart, loginSuccess, loginFailure } from '../../redux/slices/authSlice';
-import authService from '../../services/authService';
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const Login = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+// Инициализация приложения Express
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Статические файлы (только один раз)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Подключение к PostgreSQL
+const pool = new Pool({
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'photo_locations',
+  password: process.env.DB_PASSWORD || 'your_password',
+  port: process.env.DB_PORT || 5432,
+});
+
+// Проверка подключения к базе данных
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Ошибка подключения к PostgreSQL:', err.stack);
+  } else {
+    console.log('PostgreSQL connected:', res.rows[0]);
+  }
+});
+
+// Базовый маршрут для проверки
+app.get('/', (req, res) => {
+  res.send('API is running');
+});
+
+// Импорт всех маршрутов
+const userRoutes = require('./routes/userRoutes');
+const locationRoutes = require('./routes/locationRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const authRoutes = require('./routes/authRoutes');
+
+// Подключение маршрутов
+app.use('/api/auth', authRoutes);        // Добавлен auth маршрут
+app.use('/api/users', userRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/categories', categoryRoutes);
+
+// Проверяем, существует ли файл api.js, если да - подключаем
+try {
+  const apiRoutes = require('./routes/api');
+  app.use('/api', apiRoutes);
+  console.log('✅ API routes подключены');
+} catch (error) {
+  console.log('ℹ️ Файл routes/api.js не найден, пропускаем');
+}
+
+// Обработка ошибок
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err.stack);
+  res.status(500).json({
+    message: 'Что-то пошло не так!',
+    error: process.env.NODE_ENV === 'production' ? {} : err.stack
   });
-  const { email, password } = formData;
-  
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const { loading, error } = useSelector(state => state.auth);
-  
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-  
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!email || !password) {
-      dispatch(loginFailure('Пожалуйста, заполните все поля'));
-      return;
-    }
-    
-    try {
-      dispatch(loginStart());
-      console.log('Отправка запроса авторизации с данными:', { email, password });
-      const userData = await authService.login({ email, password });
-      console.log('Получен ответ от сервера:', userData);
-      dispatch(loginSuccess(userData));
-      navigate('/');
-    } catch (err) {
-      console.error('Ошибка при входе:', err);
-      let errorMessage = 'Ошибка при входе';
-      
-      if (err.response) {
-        // Сервер вернул ответ с кодом ошибки
-        console.error('Ответ сервера:', err.response.data);
-        errorMessage = err.response.data.message || 'Неверный email или пароль';
-      } else if (err.request) {
-        // Запрос был отправлен, но ответ не получен
-        console.error('Запрос отправлен, но ответ не получен');
-        errorMessage = 'Сервер недоступен. Пожалуйста, попробуйте позже.';
-      } else {
-        // Произошла ошибка при настройке запроса
-        console.error('Ошибка при настройке запроса:', err.message);
-        errorMessage = 'Ошибка при отправке запроса';
-      }
-      
-      dispatch(loginFailure(errorMessage));
-    }
-  };
-  
-  return (
-    <Card className="auth-form">
-      <Card.Header as="h4" className="text-center">Вход в систему</Card.Header>
-      <Card.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
-        
-        <Form onSubmit={handleSubmit}>
-          <Form.Group className="mb-3">
-            <Form.Label>Email</Form.Label>
-            <Form.Control
-              type="email"
-              name="email"
-              value={email}
-              onChange={handleChange}
-              placeholder="Введите ваш email"
-              required
-            />
-          </Form.Group>
-          
-          <Form.Group className="mb-3">
-            <Form.Label>Пароль</Form.Label>
-            <Form.Control
-              type="password"
-              name="password"
-              value={password}
-              onChange={handleChange}
-              placeholder="Введите ваш пароль"
-              required
-            />
-          </Form.Group>
-          
-          <Button 
-            variant="primary" 
-            type="submit" 
-            className="w-100 mt-3"
-            disabled={loading}
-          >
-            {loading ? 'Вход...' : 'Войти'}
-          </Button>
-        </Form>
-        
-        <div className="text-center mt-3">
-          <p>
-            Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-          </p>
-        </div>
-      </Card.Body>
-    </Card>
-  );
-};
+});
 
-export default Login;
+// Обработка 404 ошибок
+app.use('*', (req, res) => {
+  res.status(404).json({
+    message: `Маршрут ${req.originalUrl} не найден`
+  });
+});
+
+// Запуск сервера
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 API endpoints:`);
+  console.log(`   - Auth: http://localhost:${PORT}/api/auth`);
+  console.log(`   - Users: http://localhost:${PORT}/api/users`);
+  console.log(`   - Locations: http://localhost:${PORT}/api/locations`);
+  console.log(`   - Categories: http://localhost:${PORT}/api/categories`);
+});
