@@ -36,3 +36,46 @@
     transform: rotate(360deg);
   }
 }
+/* client/src/index.css */
+
+/* Стили для увеличения размера Яндекс.Карт */
+.ymaps-2-1-79-map {
+  width: 100% !important;
+  height: 500px !important;
+  min-height: 500px !important;
+}
+
+.ymaps-2-1-79-map-container {
+  width: 100% !important;
+  height: 500px !important;
+}
+
+/* client/src/index.css */
+
+/* Стили для увеличения размера Яндекс.Карт */
+.ymaps-2-1-79-map {
+  width: 100% !important;
+  height: 600px !important;
+  min-height: 600px !important;
+  min-width: 100% !important;
+}
+
+.ymaps-2-1-79-map-container {
+  width: 100% !important;
+  height: 600px !important;
+}
+
+/* Дополнительные стили для контейнера карты */
+.map-container {
+  width: 100%;
+  height: 600px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Принудительное увеличение всех элементов карты */
+.ymaps-2-1-79-map * {
+  max-width: none !important;
+  max-height: none !important;
+}

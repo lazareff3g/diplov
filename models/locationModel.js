@@ -91,7 +91,6 @@ const getLocations = async (filters = {}, page = 1, limit = 10) => {
   };
 };
 
-
 // Получение локации по ID
 const getLocationById = async (id) => {
   const query = `
@@ -190,45 +189,50 @@ const deleteLocation = async (id) => {
   return { success: true };
 };
 
-module.exports = {
-  createLocation,
-  getLocations,
-  getLocationById,
-  updateLocation,
-  deleteLocation
-};
 // Поиск ближайших локаций
 const getNearbyLocations = async (latitude, longitude, radiusInKm = 10) => {
-  // Преобразуем радиус из км в метры
-  const radiusInMeters = radiusInKm * 1000;
-  
-  const query = `
-    SELECT l.*, 
-           ST_X(l.coordinates) as longitude, 
-           ST_Y(l.coordinates) as latitude,
-           u.username as creator_username, 
-           c.name as category_name,
-           ST_Distance(
-             l.coordinates::geography, 
-             ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
-           ) as distance
-    FROM locations l
-    JOIN users u ON l.created_by = u.id
-    JOIN categories c ON l.category_id = c.id
-    WHERE ST_DWithin(
-      l.coordinates::geography,
-      ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-      $3
-    )
-    ORDER BY distance
-  `;
-  
-  const values = [longitude, latitude, radiusInMeters];
-  const result = await pool.query(query, values);
-  return result.rows;
+  try {
+    console.log('Поиск локаций поблизости:', { latitude, longitude, radiusInKm });
+    
+    // Преобразуем радиус из км в метры
+    const radiusInMeters = radiusInKm * 1000;
+    
+    const query = `
+      SELECT l.*, 
+             ST_X(l.coordinates) as longitude, 
+             ST_Y(l.coordinates) as latitude,
+             u.username as creator_username, 
+             c.name as category_name,
+             ST_Distance(
+               l.coordinates::geography, 
+               ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+             ) / 1000 as distance
+      FROM locations l
+      LEFT JOIN users u ON l.created_by = u.id
+      LEFT JOIN categories c ON l.category_id = c.id
+      WHERE ST_DWithin(
+        l.coordinates::geography,
+        ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+        $3
+      )
+      ORDER BY distance ASC
+      LIMIT 50
+    `;
+    
+    const values = [longitude, latitude, radiusInMeters];
+    console.log('SQL запрос:', query);
+    console.log('Параметры:', values);
+    
+    const result = await pool.query(query, values);
+    console.log('Найдено локаций:', result.rows.length);
+    
+    return result.rows;
+  } catch (error) {
+    console.error('Ошибка в getNearbyLocations:', error);
+    throw error;
+  }
 };
 
-// Добавьте метод в экспорт
 module.exports = {
   createLocation,
   getLocations,

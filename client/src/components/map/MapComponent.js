@@ -51,39 +51,46 @@ const MapComponent = ({ locations = [], loading = false, onLocationSelect = () =
   }
 
   return (
-    <div style={{ width: '100%', height: '500px', position: 'relative' }}>
+    <div style={{ 
+      width: '100%', 
+      height: '600px', 
+      border: '1px solid #ddd', 
+      borderRadius: '8px', 
+      overflow: 'hidden',
+      backgroundColor: '#f8f9fa'
+    }}>
       <YMaps>
-        <div style={{ width: '100%', height: '100%', position: 'absolute' }}>
-          <Map
-            defaultState={mapState}
-            width="100%"
-            height="100%"
-            modules={['geocode', 'geoObject.addon.balloon']}
-            onLoad={handleMapLoad}
-            instanceRef={handleMapLoad}
-          >
-            {locations && locations.map(location => (
-              <Placemark
-                key={location.id}
-                geometry={[location.latitude, location.longitude]}
-                properties={{
-                  balloonContentHeader: location.name,
-                  balloonContentBody: `
-                    <div>
-                      <p>${location.description ? location.description.substring(0, 100) + '...' : ''}</p>
-                      <a href="/locations/${location.id}">Подробнее</a>
-                    </div>
-                  `,
-                  hintContent: location.name
-                }}
-                options={{
-                  preset: 'islands#violetIcon'
-                }}
-                onClick={() => onLocationSelect(location.id)}
-              />
-            ))}
-          </Map>
-        </div>
+        <Map
+          defaultState={mapState}
+          style={{ width: '100%', height: '100%' }}
+          modules={['geocode', 'geoObject.addon.balloon']}
+          onLoad={handleMapLoad}
+          instanceRef={handleMapLoad}
+          options={{
+            suppressMapOpenBlock: true
+          }}
+        >
+          {locations && locations.map(location => (
+            <Placemark
+              key={location.id}
+              geometry={[location.latitude, location.longitude]}
+              properties={{
+                balloonContentHeader: location.name,
+                balloonContentBody: `
+                  <div style="max-width: 300px;">
+                    <p>${location.description ? location.description.substring(0, 100) + '...' : ''}</p>
+                    <a href="/locations/${location.id}" target="_blank">Подробнее</a>
+                  </div>
+                `,
+                hintContent: location.name
+              }}
+              options={{
+                preset: 'islands#violetIcon'
+              }}
+              onClick={() => onLocationSelect(location.id)}
+            />
+          ))}
+        </Map>
       </YMaps>
     </div>
   );

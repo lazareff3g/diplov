@@ -5,9 +5,13 @@ const {
   getLocationById,
   createLocation,
   updateLocation,
-  deleteLocation
+  deleteLocation,
+  getNearbyLocations
 } = require('../controllers/locationController');
 const { protect } = require('../middleware/auth');
+
+// ВАЖНО: Маршрут /nearby должен быть ПЕРЕД /:id
+router.get('/nearby', getNearbyLocations);
 
 // Публичные маршруты
 router.get('/', getLocations);

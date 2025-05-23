@@ -42,7 +42,13 @@ const LocationMap = ({ locations, onLocationSelect, center, zoom }) => {
   };
 
   return (
-    <div className="location-map">
+    <div className="location-map" style={{ 
+      width: '100%', 
+      height: '600px', 
+      border: '1px solid #ddd', 
+      borderRadius: '8px', 
+      overflow: 'hidden' 
+    }}>
       <YMaps query={{ apikey: process.env.REACT_APP_YANDEX_MAPS_API_KEY }}>
         <Map
           defaultState={{
@@ -50,11 +56,13 @@ const LocationMap = ({ locations, onLocationSelect, center, zoom }) => {
             zoom: defaultZoom,
             controls: ['zoomControl', 'fullscreenControl', 'geolocationControl']
           }}
-          width="100%"
-          height="500px"
+          style={{ width: '100%', height: '100%' }}
           instanceRef={mapRef}
           onLoad={handleMapLoad}
           modules={['clusterer.addon.balloon']}
+          options={{
+            suppressMapOpenBlock: true
+          }}
         >
           {/* Кластеризация меток */}
           <Clusterer
@@ -70,8 +78,13 @@ const LocationMap = ({ locations, onLocationSelect, center, zoom }) => {
                 geometry={[location.latitude, location.longitude]}
                 properties={{
                   balloonContentHeader: location.name,
-                  balloonContentBody: location.description,
-                  balloonContentFooter: `Категория: ${location.category_name}`,
+                  balloonContentBody: `
+                    <div style="max-width: 300px;">
+                      <p>${location.description || ''}</p>
+                      <p><strong>Категория:</strong> ${location.category_name || ''}</p>
+                    </div>
+                  `,
+                  balloonContentFooter: `<a href="/locations/${location.id}" target="_blank">Подробнее</a>`,
                   hintContent: location.name
                 }}
                 options={{

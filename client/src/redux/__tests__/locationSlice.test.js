@@ -2,11 +2,19 @@
 import locationReducer, {
   fetchLocations,
   fetchLocationById,
+  createLocation,
   clearLocation,
   setFilters,
   clearFilters,
   setCurrentPage,
-  setTotalPages
+  setTotalPages,
+  getLocationsStart,
+  getLocationsSuccess,
+  getLocationsFailure,
+  createLocationStart,
+  createLocationSuccess,
+  createLocationFailure,
+  clearError
 } from '../slices/locationSlice';
 
 describe('location reducer', () => {
@@ -27,7 +35,9 @@ describe('location reducer', () => {
       permission_required: ''
     },
     currentPage: 1,
-    totalPages: 1
+    totalPages: 1,
+    creating: false,        // Добавлено новое поле
+    createError: null       // Добавлено новое поле
   };
 
   test('should handle initial state', () => {
@@ -86,6 +96,39 @@ describe('location reducer', () => {
     });
     expect(actual.loading).toEqual(false);
     expect(actual.error).toEqual(error);
+  });
+
+  // Добавляем тесты для новых actions создания локаций
+  test('should handle createLocationStart', () => {
+    const actual = locationReducer(initialState, createLocationStart());
+    expect(actual.creating).toEqual(true);
+    expect(actual.createError).toEqual(null);
+  });
+
+  test('should handle createLocationSuccess', () => {
+    const newLocation = { id: 2, name: 'New Location' };
+    const actual = locationReducer(initialState, createLocationSuccess(newLocation));
+    expect(actual.creating).toEqual(false);
+    expect(actual.locations).toContain(newLocation);
+    expect(actual.createError).toEqual(null);
+  });
+
+  test('should handle createLocationFailure', () => {
+    const error = 'Create error';
+    const actual = locationReducer(initialState, createLocationFailure(error));
+    expect(actual.creating).toEqual(false);
+    expect(actual.createError).toEqual(error);
+  });
+
+  test('should handle clearError', () => {
+    const state = {
+      ...initialState,
+      error: 'Some error',
+      createError: 'Create error'
+    };
+    const actual = locationReducer(state, clearError());
+    expect(actual.error).toBeNull();
+    expect(actual.createError).toBeNull();
   });
 
   test('should handle clearLocation', () => {

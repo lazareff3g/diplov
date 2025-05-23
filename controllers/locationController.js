@@ -28,6 +28,15 @@ exports.getLocations = async (req, res) => {
     // Получаем локации с применением фильтров и пагинации
     const result = await locationModel.getLocations(filters, parseInt(page), parseInt(limit));
     
+    // Обрабатываем координаты для каждой локации
+    if (result.locations) {
+      result.locations = result.locations.map(location => ({
+        ...location,
+        latitude: location.latitude || (location.coordinates ? location.coordinates.coordinates[1] : null),
+        longitude: location.longitude || (location.coordinates ? location.coordinates.coordinates[0] : null)
+      }));
+    }
+    
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: 'Ошибка при получении локаций', error: err.message });
@@ -42,7 +51,14 @@ exports.getLocationById = async (req, res) => {
       return res.status(404).json({ message: 'Локация не найдена' });
     }
     
-    res.json(location);
+    // Обрабатываем координаты для отдельной локации
+    const processedLocation = {
+      ...location,
+      latitude: location.latitude || (location.coordinates ? location.coordinates.coordinates[1] : null),
+      longitude: location.longitude || (location.coordinates ? location.coordinates.coordinates[0] : null)
+    };
+    
+    res.json(processedLocation);
   } catch (err) {
     res.status(500).json({ message: 'Ошибка при получении локации', error: err.message });
   }
@@ -54,6 +70,8 @@ exports.createLocation = async (req, res) => {
       name,
       description,
       coordinates,
+      latitude,
+      longitude,
       address,
       category_id,
       best_time_of_day,
@@ -64,15 +82,22 @@ exports.createLocation = async (req, res) => {
     } = req.body;
     
     // Проверка наличия обязательных полей
-    if (!name || !description || !coordinates || !address || !category_id) {
+    if (!name || !description || !address || !category_id) {
       return res.status(400).json({ message: 'Пожалуйста, заполните все обязательные поля' });
+    }
+    
+    // Проверка координат - принимаем либо coordinates, либо latitude/longitude
+    if (!coordinates && (!latitude || !longitude)) {
+      return res.status(400).json({ message: 'Необходимо указать координаты' });
     }
     
     // Создание локации
     const locationData = {
       name,
       description,
-      coordinates,
+      coordinates: coordinates || { type: 'Point', coordinates: [longitude, latitude] },
+      latitude: latitude || (coordinates ? coordinates.coordinates[1] : null),
+      longitude: longitude || (coordinates ? coordinates.coordinates[0] : null),
       address,
       category_id,
       best_time_of_day,
@@ -85,7 +110,14 @@ exports.createLocation = async (req, res) => {
     
     const location = await locationModel.createLocation(locationData);
     
-    res.status(201).json(location);
+    // Обрабатываем координаты в ответе
+    const processedLocation = {
+      ...location,
+      latitude: location.latitude || (location.coordinates ? location.coordinates.coordinates[1] : null),
+      longitude: location.longitude || (location.coordinates ? location.coordinates.coordinates[0] : null)
+    };
+    
+    res.status(201).json(processedLocation);
   } catch (err) {
     res.status(500).json({ message: 'Ошибка при создании локации', error: err.message });
   }
@@ -104,9 +136,25 @@ exports.updateLocation = async (req, res) => {
       return res.status(403).json({ message: 'У вас нет прав на редактирование этой локации' });
     }
     
-    const updatedLocation = await locationModel.updateLocation(req.params.id, req.body);
+    // Обрабатываем координаты в данных для обновления
+    const updateData = { ...req.body };
+    if (updateData.latitude && updateData.longitude) {
+      updateData.coordinates = { 
+        type: 'Point', 
+        coordinates: [updateData.longitude, updateData.latitude] 
+      };
+    }
     
-    res.json(updatedLocation);
+    const updatedLocation = await locationModel.updateLocation(req.params.id, updateData);
+    
+    // Обрабатываем координаты в ответе
+    const processedLocation = {
+      ...updatedLocation,
+      latitude: updatedLocation.latitude || (updatedLocation.coordinates ? updatedLocation.coordinates.coordinates[1] : null),
+      longitude: updatedLocation.longitude || (updatedLocation.coordinates ? updatedLocation.coordinates.coordinates[0] : null)
+    };
+    
+    res.json(processedLocation);
   } catch (err) {
     res.status(500).json({ message: 'Ошибка при обновлении локации', error: err.message });
   }
@@ -133,24 +181,72 @@ exports.deleteLocation = async (req, res) => {
   }
 };
 
-// Новая функция для получения ближайших локаций
+// Функция для получения ближайших локаций с ИСПРАВЛЕННОЙ обработкой distance
 exports.getNearbyLocations = async (req, res) => {
   try {
     const { latitude, longitude, radius = 10 } = req.query;
     
+    console.log('🔍 Запрос поиска поблизости:', {
+      latitude: parseFloat(latitude),
+      longitude: parseFloat(longitude),
+      radius: parseFloat(radius)
+    });
+    
     if (!latitude || !longitude) {
+      console.log('❌ Отсутствуют координаты');
       return res.status(400).json({ message: 'Необходимо указать широту и долготу' });
     }
     
-    const locations = await locationModel.getNearbyLocations(
-      parseFloat(latitude), 
-      parseFloat(longitude), 
-      parseFloat(radius)
-    );
+    // Проверяем корректность координат
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    const rad = parseFloat(radius);
     
-    res.json(locations);
+    if (isNaN(lat) || isNaN(lng) || isNaN(rad)) {
+      console.log('❌ Некорректные координаты:', { lat, lng, rad });
+      return res.status(400).json({ message: 'Некорректные координаты' });
+    }
+    
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      console.log('❌ Координаты вне допустимого диапазона:', { lat, lng });
+      return res.status(400).json({ message: 'Координаты вне допустимого диапазона' });
+    }
+    
+    console.log('✅ Вызываем locationModel.getNearbyLocations...');
+    const locations = await locationModel.getNearbyLocations(lat, lng, rad);
+    
+    console.log(`📍 Получено ${locations.length} локаций из базы данных`);
+    
+    // ИСПРАВЛЕННАЯ обработка координат для каждой локации
+    const processedLocations = locations.map(location => {
+      const processed = {
+        ...location,
+        latitude: location.latitude || (location.coordinates ? location.coordinates.coordinates[1] : null),
+        longitude: location.longitude || (location.coordinates ? location.coordinates.coordinates[0] : null),
+        // ИСПРАВЛЕНИЕ: безопасная обработка distance
+        distance: (() => {
+          if (!location.distance) return '0.00';
+          
+          const dist = parseFloat(location.distance);
+          if (isNaN(dist)) return '0.00';
+          
+          return dist.toFixed(2);
+        })()
+      };
+      
+      console.log(`📌 Локация: ${location.name}, расстояние: ${processed.distance} км`);
+      return processed;
+    });
+    
+    console.log(`✅ Отправляем ${processedLocations.length} обработанных локаций`);
+    res.json(processedLocations);
+    
   } catch (err) {
-    console.error('Ошибка при получении ближайших локаций:', err);
-    res.status(500).json({ message: 'Ошибка при получении ближайших локаций', error: err.message });
+    console.error('❌ Ошибка при получении ближайших локаций:', err);
+    res.status(500).json({ 
+      message: 'Ошибка при получении ближайших локаций', 
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 };

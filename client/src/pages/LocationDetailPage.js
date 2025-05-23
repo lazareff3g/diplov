@@ -164,8 +164,9 @@ const LocationDetailPage = () => {
         </Col>
       </Row>
       
+      {/* ИЗОБРАЖЕНИЕ НА ВСЮ ШИРИНУ */}
       <Row className="mb-4">
-        <Col md={6}>
+        <Col md={12}>
           <img 
             src={location.image_url || '/placeholder-image.jpg'} 
             alt={location.name}
@@ -173,9 +174,20 @@ const LocationDetailPage = () => {
             style={{ width: '100%', height: '400px', objectFit: 'cover' }}
           />
         </Col>
-        <Col md={6}>
-          <YMaps>
-            <div className="map-container" style={{ height: '400px' }}>
+      </Row>
+
+      {/* КАРТА НА ВСЮ ШИРИНУ */}
+      <Row className="mb-4">
+        <Col md={12}>
+          <div style={{ 
+            width: '100%', 
+            height: '600px', 
+            border: '1px solid #ddd', 
+            borderRadius: '8px', 
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+          }}>
+            <YMaps>
               <Map
                 defaultState={{ 
                   center: [location.latitude, location.longitude], 
@@ -183,11 +195,31 @@ const LocationDetailPage = () => {
                 }}
                 width="100%"
                 height="100%"
+                style={{ width: '100%', height: '100%' }}
+                options={{
+                  suppressMapOpenBlock: true,
+                  autoFitToViewport: 'always'
+                }}
               >
-                <Placemark geometry={[location.latitude, location.longitude]} />
+                <Placemark 
+                  geometry={[location.latitude, location.longitude]}
+                  properties={{
+                    balloonContent: `
+                      <div style="max-width: 350px;">
+                        <h4 style="margin: 0 0 10px 0; color: #333;">${location.name}</h4>
+                        <p style="margin: 0 0 10px 0; color: #666;">${location.description ? location.description.substring(0, 150) + '...' : ''}</p>
+                        <p style="margin: 0; color: #999;"><strong>Категория:</strong> ${location.category_name || ''}</p>
+                      </div>
+                    `,
+                    hintContent: location.name
+                  }}
+                  options={{
+                    preset: 'islands#violetIcon'
+                  }}
+                />
               </Map>
-            </div>
-          </YMaps>
+            </YMaps>
+          </div>
         </Col>
       </Row>
       

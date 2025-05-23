@@ -77,4 +77,3 @@ app.use('/api', apiRoutes);
 // Статические файлы для загруженных изображений
 app.use('/uploads', express.static('uploads'));
 
-
