@@ -1,9 +1,9 @@
+// client/src/components/auth/Register.js
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { Form, Button, Card, Alert } from 'react-bootstrap';
-import { registerStart, registerSuccess, registerFailure, clearError } from '../../redux/slices/authSlice';
-import authService from '../../services/authService';
+import { Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { registerUser, clearError } from '../../redux/slices/authSlice';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -19,12 +19,10 @@ const Register = () => {
   const { loading, error, isAuthenticated } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    // Если пользователь авторизован, перенаправляем на главную
     if (isAuthenticated) {
       navigate('/');
     }
     
-    // Очищаем ошибки при размонтировании компонента
     return () => {
       dispatch(clearError());
     };
@@ -34,33 +32,75 @@ const Register = () => {
 
   const onChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (error) {
+      dispatch(clearError());
+    }
+  };
+
+  const validateForm = () => {
+    if (password.length < 6) {
+      return 'Пароль должен содержать не менее 6 символов';
+    }
+    
+    if (password !== confirmPassword) {
+      return 'Пароли не совпадают';
+    }
+    
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    if (!usernameRegex.test(username)) {
+      return 'Имя пользователя должно содержать от 3 до 20 символов (буквы, цифры, подчеркивания)';
+    }
+    
+    return null;
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
     
-    if (form.checkValidity() === false || password !== confirmPassword) {
+    const validationError = validateForm();
+    if (form.checkValidity() === false || validationError) {
       e.stopPropagation();
       setValidated(true);
+      
+      if (validationError) {
+        console.error('Validation error:', validationError);
+      }
       return;
     }
     
     try {
-      dispatch(registerStart());
-      const userData = await authService.register({ username, email, password });
-      dispatch(registerSuccess(userData));
-      navigate('/');
+      const result = await dispatch(registerUser({ 
+        username: username.trim(), 
+        email: email.trim().toLowerCase(), 
+        password 
+      }));
+      
+      if (registerUser.fulfilled.match(result)) {
+        navigate('/');
+      }
     } catch (err) {
-      dispatch(registerFailure(err.response?.data?.message || 'Ошибка при регистрации'));
+      console.error('Registration error:', err);
     }
   };
 
+  const passwordsMatch = password === confirmPassword;
+  const passwordValid = password.length >= 6;
+  const usernameValid = /^[a-zA-Z0-9_]{3,20}$/.test(username);
+
   return (
-    <Card>
-      <Card.Header as="h4" className="text-center">Регистрация</Card.Header>
-      <Card.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
+    <div className="auth-form-container">
+      <div className="auth-form">
+        <div className="auth-header">
+          <h2 className="text-center mb-4">📝 Регистрация</h2>
+        </div>
+        
+        {error && (
+          <Alert variant="danger" dismissible onClose={() => dispatch(clearError())}>
+            {error}
+          </Alert>
+        )}
+        
         <Form noValidate validated={validated} onSubmit={onSubmit}>
           <Form.Group className="mb-3">
             <Form.Label>Имя пользователя</Form.Label>
@@ -71,9 +111,15 @@ const Register = () => {
               onChange={onChange}
               required
               placeholder="Введите имя пользователя"
+              isInvalid={validated && (!username || !usernameValid)}
+              isValid={validated && username && usernameValid}
+              size="lg"
             />
             <Form.Control.Feedback type="invalid">
-              Пожалуйста, введите имя пользователя.
+              Имя пользователя должно содержать от 3 до 20 символов (буквы, цифры, подчеркивания)
+            </Form.Control.Feedback>
+            <Form.Control.Feedback type="valid">
+              Отлично!
             </Form.Control.Feedback>
           </Form.Group>
 
@@ -86,6 +132,7 @@ const Register = () => {
               onChange={onChange}
               required
               placeholder="Введите email"
+              size="lg"
             />
             <Form.Control.Feedback type="invalid">
               Пожалуйста, введите корректный email.
@@ -100,15 +147,21 @@ const Register = () => {
               value={password}
               onChange={onChange}
               required
-              placeholder="Введите пароль"
+              placeholder="Введите пароль (минимум 6 символов)"
               minLength="6"
+              isInvalid={validated && !passwordValid}
+              isValid={validated && passwordValid}
+              size="lg"
             />
             <Form.Control.Feedback type="invalid">
               Пароль должен содержать минимум 6 символов.
             </Form.Control.Feedback>
+            <Form.Control.Feedback type="valid">
+              Пароль подходит!
+            </Form.Control.Feedback>
           </Form.Group>
 
-          <Form.Group className="mb-3">
+          <Form.Group className="mb-4">
             <Form.Label>Подтверждение пароля</Form.Label>
             <Form.Control
               type="password"
@@ -117,27 +170,41 @@ const Register = () => {
               onChange={onChange}
               required
               placeholder="Подтвердите пароль"
-              isInvalid={validated && password !== confirmPassword}
+              isInvalid={validated && (!passwordsMatch || !confirmPassword)}
+              isValid={validated && passwordsMatch && confirmPassword}
+              size="lg"
             />
             <Form.Control.Feedback type="invalid">
               Пароли не совпадают.
+            </Form.Control.Feedback>
+            <Form.Control.Feedback type="valid">
+              Пароли совпадают!
             </Form.Control.Feedback>
           </Form.Group>
 
           <Button
             variant="primary"
             type="submit"
-            className="w-100"
-            disabled={loading}
+            className="w-100 mb-3"
+            disabled={loading || !passwordsMatch || !passwordValid || !usernameValid}
+            size="lg"
           >
-            {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+            {loading ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Регистрация...
+              </>
+            ) : (
+              'Зарегистрироваться'
+            )}
           </Button>
         </Form>
-      </Card.Body>
-      <Card.Footer className="text-center">
-        Уже есть аккаунт? <Link to="/login">Войти</Link>
-      </Card.Footer>
-    </Card>
+        
+        <div className="text-center mt-3">
+          Уже есть аккаунт? <Link to="/login" className="text-decoration-none">Войти</Link>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -1,0 +1,19 @@
+/* client/src/components/auth/AuthForms.css */
+.auth-form-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.auth-form {
+  border: none !important;
+  box-shadow: none !important;
+  width: 100%;
+  max-width: 600px;
+  padding: 3rem;
+  background: white;
+  border-radius: 15px;
+  margin: 0 auto;
+}

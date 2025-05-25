@@ -1,4 +1,4 @@
-// controllers/authController.js
+// controllers/authController.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
@@ -17,7 +17,7 @@ const generateToken = (user) => {
 };
 
 // Регистрация пользователя
-exports.register = async (req, res) => {
+const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -34,7 +34,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    // ДОБАВЛЕНИЕ: Email валидация
+    // Email валидация
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ 
@@ -42,7 +42,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    // ДОБАВЛЕНИЕ: Username валидация (только буквы, цифры, подчеркивания)
+    // Username валидация (только буквы, цифры, подчеркивания)
     const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
     if (!usernameRegex.test(username)) {
       return res.status(400).json({ 
@@ -68,7 +68,7 @@ exports.register = async (req, res) => {
     // Генерируем токен
     const token = generateToken(newUser);
 
-    // УЛУЧШЕНИЕ: Логирование успешной регистрации
+    // Логирование успешной регистрации
     console.log(`✅ Новый пользователь зарегистрирован: ${username} (${email})`);
 
     res.status(201).json({
@@ -92,9 +92,9 @@ exports.register = async (req, res) => {
 };
 
 // Вход пользователя
-exports.login = async (req, res) => {
+const login = async (req, res) => {
   try {
-    const { identifier, password } = req.body; // identifier может быть username или email
+    const { identifier, password } = req.body;
 
     // Валидация входных данных
     if (!identifier || !password) {
@@ -103,13 +103,12 @@ exports.login = async (req, res) => {
       });
     }
 
-    // ДОБАВЛЕНИЕ: Trim пробелы
+    // Trim пробелы
     const cleanIdentifier = identifier.trim();
 
     // Ищем пользователя по username или email
     const user = await userModel.findUserByUsernameOrEmail(cleanIdentifier);
     if (!user) {
-      // УЛУЧШЕНИЕ: Логирование неудачных попыток входа
       console.log(`❌ Неудачная попытка входа: ${cleanIdentifier}`);
       return res.status(401).json({ 
         message: 'Неверный логин или пароль' 
@@ -128,7 +127,7 @@ exports.login = async (req, res) => {
     // Генерируем токен
     const token = generateToken(user);
 
-    // УЛУЧШЕНИЕ: Логирование успешного входа
+    // Логирование успешного входа
     console.log(`✅ Успешный вход пользователя: ${user.username}`);
 
     res.status(200).json({
@@ -151,7 +150,7 @@ exports.login = async (req, res) => {
 };
 
 // Получение профиля текущего пользователя
-exports.getProfile = async (req, res) => {
+const getProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     
@@ -177,7 +176,7 @@ exports.getProfile = async (req, res) => {
 };
 
 // Обновление профиля
-exports.updateProfile = async (req, res) => {
+const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     const { username, email } = req.body;
@@ -189,7 +188,7 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    // ДОБАВЛЕНИЕ: Валидация email при обновлении
+    // Валидация email при обновлении
     if (email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
@@ -199,7 +198,7 @@ exports.updateProfile = async (req, res) => {
       }
     }
 
-    // ДОБАВЛЕНИЕ: Валидация username при обновлении
+    // Валидация username при обновлении
     if (username) {
       const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
       if (!usernameRegex.test(username)) {
@@ -233,7 +232,6 @@ exports.updateProfile = async (req, res) => {
 
     const updatedUser = await userModel.updateUser(userId, updates);
 
-    // УЛУЧШЕНИЕ: Логирование обновления профиля
     console.log(`✅ Профиль обновлен для пользователя: ${req.user.username}`);
 
     res.status(200).json({
@@ -250,9 +248,8 @@ exports.updateProfile = async (req, res) => {
 };
 
 // Проверка токена
-exports.verifyToken = async (req, res) => {
+const verifyToken = async (req, res) => {
   try {
-    // Если middleware protect прошел успешно, значит токен валидный
     res.status(200).json({
       valid: true,
       user: {
@@ -270,8 +267,8 @@ exports.verifyToken = async (req, res) => {
   }
 };
 
-// ДОБАВЛЕНИЕ: Смена пароля
-exports.changePassword = async (req, res) => {
+// Смена пароля
+const changePassword = async (req, res) => {
   try {
     const userId = req.user.id;
     const { currentPassword, newPassword } = req.body;
@@ -327,4 +324,14 @@ exports.changePassword = async (req, res) => {
       message: 'Ошибка сервера при смене пароля' 
     });
   }
+};
+
+// ИСПРАВЛЕНИЕ: Только ОДИН экспорт в конце файла
+module.exports = {
+  register,
+  login,
+  getProfile,
+  updateProfile,
+  verifyToken,
+  changePassword
 };

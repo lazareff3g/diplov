@@ -1,487 +1,365 @@
-// src/pages/EditLocationPage.js
+// client/src/pages/EditLocationPage.js - ПОЛНАЯ РАБОЧАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
-import { Container, Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Form, Button, Alert, Card, Spinner } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { YMaps, Map, Placemark, SearchControl } from '@pbe/react-yandex-maps';
-import { FaMapMarkerAlt } from 'react-icons/fa';
-import api from '../services/api';
-import { fetchLocationById } from '../redux/slices/locationSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import MapComponent from '../components/map/MapComponent';
 
 const EditLocationPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
-  const { user, isAuthenticated } = useSelector(state => state.auth);
-  const { location, loading, error } = useSelector(state => state.locations || {});
+  const { user } = useSelector(state => state.auth);
   
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     category_id: '',
+    coordinates: null,
     address: '',
-    city: '',
-    latitude: null,
-    longitude: null,
-    best_time_of_day: '',
-    best_season: '',
     accessibility: '',
-    difficulty_level: '',
-    permission_required: false
+    best_time: '',
+    difficulty: 1,
+    tags: ''
   });
-  
-  const [categories, setCategories] = useState([]);
-  const [formErrors, setFormErrors] = useState({});
-  const [submitError, setSubmitError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [mapCenter, setMapCenter] = useState([55.7558, 37.6173]);
-  const [mapZoom, setMapZoom] = useState(10);
-  
-  // Загружаем категории при монтировании компонента
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Загрузка данных локации
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchLocation = async () => {
       try {
-        const response = await api.get('/categories');
-        setCategories(response.data);
-      } catch (error) {
-        console.error('Ошибка при загрузке категорий:', error);
+        setLoading(true);
+        const response = await fetch(`http://localhost:5000/api/locations/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const location = data.location || data;
+          
+          console.log('📍 Загруженная локация:', location);
+          
+          setFormData({
+            name: location.name || '',
+            description: location.description || '',
+            category_id: location.category_id?.toString() || '',
+            coordinates: [location.latitude, location.longitude],
+            address: location.address || '',
+            accessibility: location.accessibility || '',
+            best_time: location.best_time_of_day || '',
+            difficulty: location.difficulty_level || 1,
+            tags: location.tags || ''
+          });
+          
+          setSelectedLocation({
+            coordinates: [location.latitude, location.longitude],
+            address: location.address || '',
+            name: location.name || ''
+          });
+        } else {
+          throw new Error('Локация не найдена');
+        }
+      } catch (err) {
+        console.error('❌ Ошибка загрузки локации:', err);
+        setError('Ошибка загрузки локации');
+      } finally {
+        setLoading(false);
       }
     };
-    
-    fetchCategories();
-  }, []);
-  
-  // Загружаем данные локации при монтировании компонента
-  useEffect(() => {
-    if (isAuthenticated && id) {
-      dispatch(fetchLocationById(id));
+
+    if (id) {
+      fetchLocation();
     }
-  }, [dispatch, id, isAuthenticated]);
-  
-  // Заполняем форму данными локации, когда они загружены
-  useEffect(() => {
-    if (location) {
-      setFormData({
-        name: location.name || '',
-        description: location.description || '',
-        category_id: location.category_id || '',
-        address: location.address || '',
-        city: location.city || '',
-        latitude: location.latitude || null,
-        longitude: location.longitude || null,
-        best_time_of_day: location.best_time_of_day || '',
-        best_season: location.best_season || '',
-        accessibility: location.accessibility || '',
-        difficulty_level: location.difficulty_level || '',
-        permission_required: location.permission_required || false
-      });
-      
-      if (location.latitude && location.longitude) {
-        setMapCenter([location.latitude, location.longitude]);
-      }
-    }
-  }, [location]);
-  
-  // Перенаправляем неавторизованных пользователей
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');
-    }
-  }, [isAuthenticated, navigate]);
-  
-  // Перенаправляем пользователей, не являющихся владельцами локации
-  useEffect(() => {
-    if (isAuthenticated && location && user && location.created_by !== user.id) {
-      navigate(`/locations/${id}`);
-    }
-  }, [isAuthenticated, location, user, id, navigate]);
-  
-  // Обработчик изменения полей формы
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  }, [id]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: value
     }));
     
-    // Очищаем ошибку для этого поля, если она была
-    if (formErrors[name]) {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: null
-      }));
+    if (error) {
+      setError('');
     }
   };
-  
-  // Обработчик клика на карте
-  const handleMapClick = (e) => {
-    const coords = e.get('coords');
+
+  const handleLocationSelect = (locationData) => {
+    console.log('🗺️ Выбрана новая локация:', locationData);
+    
+    setSelectedLocation(locationData);
     setFormData(prev => ({
       ...prev,
-      latitude: coords[0],
-      longitude: coords[1]
+      coordinates: locationData.coordinates,
+      address: locationData.address
     }));
-    setMapCenter(coords);
   };
-  
-  // Валидация формы
-  const validateForm = () => {
-    const errors = {};
-    
-    if (!formData.name.trim()) {
-      errors.name = 'Пожалуйста, введите название локации.';
-    }
-    
-    if (!formData.description.trim()) {
-      errors.description = 'Пожалуйста, введите описание локации.';
-    }
-    
-    if (!formData.category_id) {
-      errors.category_id = 'Пожалуйста, выберите категорию.';
-    }
-    
-    if (!formData.address.trim()) {
-      errors.address = 'Пожалуйста, введите адрес.';
-    }
-    
-    if (!formData.latitude || !formData.longitude) {
-      errors.location = 'Пожалуйста, выберите местоположение на карте.';
-    }
-    
-    if (!formData.accessibility) {
-      errors.accessibility = 'Пожалуйста, выберите способ добраться до места.';
-    }
-    
-    if (!formData.difficulty_level) {
-      errors.difficulty_level = 'Пожалуйста, выберите уровень сложности.';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-  
-  // Обработчик отправки формы
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-    
-    setIsSubmitting(true);
-    setSubmitError(null);
-    
+    setUpdating(true);
+    setError('');
+    setSuccess('');
+
     try {
-      await api.put(`/locations/${id}`, formData);
-      navigate(`/locations/${id}`);
-    } catch (error) {
-      console.error('Ошибка при обновлении локации:', error);
-      setSubmitError('Произошла ошибка при обновлении локации. Пожалуйста, попробуйте снова.');
+      if (!formData.name.trim()) {
+        throw new Error('Название локации обязательно');
+      }
+
+      if (!formData.coordinates) {
+        throw new Error('Выберите локацию на карте');
+      }
+
+      const updateData = {
+        name: formData.name.trim(),
+        description: formData.description.trim() || '',
+        coordinates: formData.coordinates,
+        address: formData.address || `${formData.coordinates[0].toFixed(6)}, ${formData.coordinates[1].toFixed(6)}`,
+        category_id: parseInt(formData.category_id) || null,
+        accessibility: formData.accessibility || null,
+        best_time_of_day: formData.best_time || null,
+        difficulty_level: parseInt(formData.difficulty) || 1,
+        tags: formData.tags || null
+      };
+
+      console.log('📤 Отправляем обновленные данные:', updateData);
+
+      const response = await fetch(`http://localhost:5000/api/locations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Локация обновлена:', result);
+        setSuccess('Локация успешно обновлена!');
+        
+        setTimeout(() => {
+          navigate(`/locations/${id}`);
+        }, 1500);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Ошибка обновления локации');
+      }
+    } catch (err) {
+      console.error('❌ Ошибка обновления:', err);
+      setError(err.message);
     } finally {
-      setIsSubmitting(false);
+      setUpdating(false);
     }
   };
-  
-  // Обработчик кнопки "Назад"
-  const handleBack = () => {
-    navigate(`/locations/${id}`);
-  };
-  
-  // Если идет загрузка данных локации
+
   if (loading) {
     return (
-      <Container className="py-5 text-center">
-        <Spinner animation="border" role="status">
-          <span className="visually-hidden">Загрузка...</span>
-        </Spinner>
+      <Container className="py-4 text-center">
+        <Spinner animation="border" variant="primary" />
+        <p className="mt-3">Загрузка данных локации...</p>
       </Container>
     );
   }
-  
-  // Если произошла ошибка при загрузке данных локации
-  if (error) {
-    return (
-      <Container className="py-5">
-        <Alert variant="danger">
-          Ошибка при загрузке данных локации: {error}
-        </Alert>
-        <Button variant="secondary" onClick={handleBack}>
-          Назад
-        </Button>
-      </Container>
-    );
-  }
-  
-  // Если данные локации не найдены
-  if (!location) {
-    return (
-      <Container className="py-5">
-        <Alert variant="warning">
-          Не удалось загрузить данные локации
-        </Alert>
-        <Button variant="secondary" onClick={handleBack}>
-          Назад
-        </Button>
-      </Container>
-    );
-  }
-  
+
   return (
-    <Container className="py-5">
-      <h1 className="mb-4 text-center">Редактирование локации</h1>
-      
-      {submitError && (
-        <Alert variant="danger" className="mb-4">
-          {submitError}
-        </Alert>
-      )}
-      
-      <Form onSubmit={handleSubmit}>
-        <Row>
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>Название</Form.Label>
-              <Form.Control
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Введите название локации"
-                isInvalid={!!formErrors.name}
-              />
-              <Form.Control.Feedback type="invalid">
-                {formErrors.name}
-              </Form.Control.Feedback>
-            </Form.Group>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Описание</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={5}
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                placeholder="Введите описание локации"
-                isInvalid={!!formErrors.description}
-              />
-              <Form.Control.Feedback type="invalid">
-                {formErrors.description}
-              </Form.Control.Feedback>
-            </Form.Group>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Категория</Form.Label>
-              <Form.Select
-                name="category_id"
-                value={formData.category_id}
-                onChange={handleChange}
-                isInvalid={!!formErrors.category_id}
-                title="Выберите категорию, к которой относится место"
-              >
-                <option value="">Выберите категорию</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </Form.Select>
-              <Form.Control.Feedback type="invalid">
-                {formErrors.category_id}
-              </Form.Control.Feedback>
-            </Form.Group>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Адрес</Form.Label>
-              <Form.Control
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="Введите адрес"
-                isInvalid={!!formErrors.address}
-              />
-              <Form.Control.Feedback type="invalid">
-                {formErrors.address}
-              </Form.Control.Feedback>
-            </Form.Group>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Город</Form.Label>
-              <Form.Control
-                type="text"
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                placeholder="Введите город"
-              />
-            </Form.Group>
-            
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Лучшее время суток</Form.Label>
-                  <Form.Select
-                    name="best_time_of_day"
-                    value={formData.best_time_of_day}
-                    onChange={handleChange}
-                    title="Выберите лучшее время суток для посещения"
-                  >
-                    <option value="">Выберите время суток</option>
-                    <option value="morning">Утро</option>
-                    <option value="afternoon">День</option>
-                    <option value="evening">Вечер</option>
-                    <option value="night">Ночь</option>
-                    <option value="any">Любое</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Лучший сезон</Form.Label>
-                  <Form.Select
-                    name="best_season"
-                    value={formData.best_season}
-                    onChange={handleChange}
-                    title="Выберите лучший сезон для посещения"
-                  >
-                    <option value="">Выберите сезон</option>
-                    <option value="spring">Весна</option>
-                    <option value="summer">Лето</option>
-                    <option value="autumn">Осень</option>
-                    <option value="winter">Зима</option>
-                    <option value="any">Любой</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Доступность</Form.Label>
-                  <Form.Select
-                    name="accessibility"
-                    value={formData.accessibility}
-                    onChange={handleChange}
-                    isInvalid={!!formErrors.accessibility}
-                    title="Выберите способ добраться до места"
-                  >
-                    <option value="">Выберите доступность</option>
-                    <option value="car">На машине</option>
-                    <option value="public_transport">На общественном транспорте</option>
-                    <option value="walking">Пешком</option>
-                    <option value="hiking">Треккинг</option>
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    {formErrors.accessibility}
-                  </Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Уровень сложности</Form.Label>
-                  <Form.Select
-                    name="difficulty_level"
-                    value={formData.difficulty_level}
-                    onChange={handleChange}
-                    isInvalid={!!formErrors.difficulty_level}
-                    title="Выберите уровень сложности доступа к месту"
-                  >
-                    <option value="">Выберите уровень сложности</option>
-                    <option value="easy">Легкий</option>
-                    <option value="medium">Средний</option>
-                    <option value="hard">Сложный</option>
-                    <option value="extreme">Экстремальный</option>
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">
-                    {formErrors.difficulty_level}
-                  </Form.Control.Feedback>
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="checkbox"
-                label="Требуется разрешение для посещения"
-                name="permission_required"
-                checked={formData.permission_required}
-                onChange={handleChange}
-              />
-            </Form.Group>
-          </Col>
-          
-          <Col md={6}>
-            <Form.Group className="mb-3">
-              <Form.Label>
-                <FaMapMarkerAlt /> Местоположение на карте
-              </Form.Label>
-              <div className="mb-2">
-                Кликните на карте, чтобы выбрать местоположение
-              </div>
-              
-              {formErrors.location && (
-                <Alert variant="danger" className="mb-2">
-                  {formErrors.location}
+    <Container className="py-4">
+      <Row className="justify-content-center">
+        <Col md={10} lg={8}>
+          <Card className="shadow">
+            <Card.Header className="bg-warning text-dark">
+              <h2 className="mb-0">✏️ Редактировать локацию</h2>
+            </Card.Header>
+            <Card.Body>
+              {error && (
+                <Alert variant="danger" dismissible onClose={() => setError('')}>
+                  <strong>Ошибка:</strong> {error}
                 </Alert>
               )}
-              
-              <YMaps>
-                <div className="map-container" style={{ height: '400px' }}>
-                  <Map
-                    defaultState={{ center: mapCenter, zoom: mapZoom }}
-                    width="100%"
-                    height="100%"
-                    onClick={handleMapClick}
-                  >
-                    <SearchControl options={{ float: 'right' }} />
-                    {formData.latitude && formData.longitude && (
-                      <Placemark geometry={[formData.latitude, formData.longitude]} />
-                    )}
-                  </Map>
-                </div>
-              </YMaps>
-              
-              {formData.latitude && formData.longitude && (
-                <div className="mt-2">
-                  <small>
-                    Координаты: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
-                  </small>
-                </div>
+
+              {success && (
+                <Alert variant="success" dismissible onClose={() => setSuccess('')}>
+                  <strong>Успех:</strong> {success}
+                </Alert>
               )}
-            </Form.Group>
-          </Col>
-        </Row>
-        
-        <div className="d-flex justify-content-between mt-4">
-          <Button variant="secondary" onClick={handleBack}>
-            Отмена
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <Spinner
-                  as="span"
-                  animation="border"
-                  size="sm"
-                  role="status"
-                  aria-hidden="true"
-                  className="me-2"
-                />
-                Сохранение...
-              </>
-            ) : (
-              'Сохранить изменения'
-            )}
-          </Button>
-        </div>
-      </Form>
+
+              <Form onSubmit={handleSubmit}>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Название локации *</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        placeholder="Введите название локации"
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Категория</Form.Label>
+                      <Form.Select
+                        name="category_id"
+                        value={formData.category_id}
+                        onChange={handleInputChange}
+                      >
+                        <option value="">Выберите категорию</option>
+                        <option value="1">Природа</option>
+                        <option value="2">Архитектура</option>
+                        <option value="3">Городской пейзаж</option>
+                        <option value="4">Историческое место</option>
+                        <option value="5">Парки и сады</option>
+                        <option value="6">Водоемы</option>
+                        <option value="7">Горы и холмы</option>
+                        <option value="8">Другое</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Описание</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    placeholder="Описание локации..."
+                  />
+                </Form.Group>
+
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Доступность</Form.Label>
+                      <Form.Select
+                        name="accessibility"
+                        value={formData.accessibility}
+                        onChange={handleInputChange}
+                      >
+                        <option value="">Выберите уровень доступности</option>
+                        <option value="easy">Легкий доступ</option>
+                        <option value="moderate">Средний доступ</option>
+                        <option value="difficult">Сложный доступ</option>
+                        <option value="expert">Только для экспертов</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Лучшее время для съемки</Form.Label>
+                      <Form.Select
+                        name="best_time"
+                        value={formData.best_time}
+                        onChange={handleInputChange}
+                      >
+                        <option value="">Выберите время</option>
+                        <option value="sunrise">Рассвет</option>
+                        <option value="morning">Утро</option>
+                        <option value="noon">День</option>
+                        <option value="afternoon">После полудня</option>
+                        <option value="sunset">Закат</option>
+                        <option value="night">Ночь</option>
+                        <option value="any">Любое время</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Сложность съемки</Form.Label>
+                      <Form.Select
+                        name="difficulty"
+                        value={formData.difficulty}
+                        onChange={handleInputChange}
+                      >
+                        <option value="1">1 - Очень легко</option>
+                        <option value="2">2 - Легко</option>
+                        <option value="3">3 - Средне</option>
+                        <option value="4">4 - Сложно</option>
+                        <option value="5">5 - Очень сложно</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Теги</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="tags"
+                        value={formData.tags}
+                        onChange={handleInputChange}
+                        placeholder="закат, природа, река (через запятую)"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Form.Group className="mb-4">
+                  <Form.Label>Расположение на карте *</Form.Label>
+                  <div className="border rounded p-2" style={{ minHeight: '350px' }}>
+                    <MapComponent
+                      center={formData.coordinates || [55.751244, 37.618423]}
+                      zoom={12}
+                      height="320px"
+                      onLocationSelect={handleLocationSelect}
+                      selectedLocation={selectedLocation}
+                      interactive={true}
+                    />
+                  </div>
+                  {selectedLocation && (
+                    <div className="mt-2">
+                      <small className="text-success">
+                        ✅ Текущее расположение: {selectedLocation.address}
+                      </small>
+                    </div>
+                  )}
+                </Form.Group>
+
+                <div className="d-flex gap-2 justify-content-end">
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate(`/locations/${id}`)}
+                    disabled={updating}
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={updating}
+                    size="lg"
+                  >
+                    {updating ? (
+                      <>
+                        <Spinner animation="border" size="sm" className="me-2" />
+                        Сохранение...
+                      </>
+                    ) : (
+                      '💾 Сохранить изменения'
+                    )}
+                  </Button>
+                </div>
+              </Form>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
     </Container>
   );
 };

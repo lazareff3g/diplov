@@ -1,6 +1,27 @@
-// client/src/redux/slices/authSlice.js
+// client/src/redux/slices/authSlice.js - ИСПРАВЛЕННАЯ ВЕРСИЯ С ИНИЦИАЛИЗАЦИЕЙ
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
+
+// ИСПРАВЛЕНИЕ: Функция для безопасного получения данных из localStorage
+const getInitialUser = () => {
+  try {
+    const userData = localStorage.getItem('user');
+    return userData ? JSON.parse(userData) : null;
+  } catch (error) {
+    console.error('❌ Ошибка парсинга данных пользователя:', error);
+    localStorage.removeItem('user'); // Удаляем поврежденные данные
+    return null;
+  }
+};
+
+const getInitialToken = () => {
+  try {
+    return localStorage.getItem('token') || null;
+  } catch (error) {
+    console.error('❌ Ошибка получения токена:', error);
+    return null;
+  }
+};
 
 // Асинхронные действия с createAsyncThunk
 export const registerUser = createAsyncThunk(
@@ -11,6 +32,7 @@ export const registerUser = createAsyncThunk(
       
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
       }
       
@@ -31,6 +53,7 @@ export const loginUser = createAsyncThunk(
       
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
         api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
       }
       
@@ -85,6 +108,8 @@ export const verifyToken = createAsyncThunk(
       return response.data;
     } catch (error) {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('profileImage');
       delete api.defaults.headers.common['Authorization'];
       
       return rejectWithValue(
@@ -94,10 +119,11 @@ export const verifyToken = createAsyncThunk(
   }
 );
 
+// ИСПРАВЛЕНИЕ: Инициализация состояния с данными из localStorage
 const initialState = {
-  user: null,
-  token: localStorage.getItem('token'),
-  isAuthenticated: false,
+  user: getInitialUser(), // Получаем пользователя из localStorage
+  token: getInitialToken(), // Получаем токен из localStorage
+  isAuthenticated: !!(getInitialToken() && getInitialUser()), // Проверяем и токен и пользователя
   loading: false,
   error: null
 };
@@ -106,7 +132,6 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    // Ваши существующие reducers
     loginStart: (state) => {
       state.loading = true;
       state.error = null;
@@ -118,14 +143,16 @@ const authSlice = createSlice({
       state.token = action.payload.token;
       state.error = null;
       
+      // ИСПРАВЛЕНИЕ: Сохраняем данные в localStorage
       if (action.payload.token) {
         localStorage.setItem('token', action.payload.token);
+      }
+      if (action.payload.user) {
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
       }
       
       if (action.payload.user?.profile_picture || action.payload.profile_picture) {
         localStorage.setItem('profileImage', action.payload.user?.profile_picture || action.payload.profile_picture);
-      } else {
-        localStorage.removeItem('profileImage');
       }
     },
     loginFailure: (state, action) => {
@@ -134,8 +161,11 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       state.error = action.payload;
-      localStorage.removeItem('profileImage');
+      
+      // Очищаем localStorage
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('profileImage');
     },
     registerStart: (state) => {
       state.loading = true;
@@ -148,14 +178,16 @@ const authSlice = createSlice({
       state.token = action.payload.token;
       state.error = null;
       
+      // ИСПРАВЛЕНИЕ: Сохраняем данные в localStorage
       if (action.payload.token) {
         localStorage.setItem('token', action.payload.token);
+      }
+      if (action.payload.user) {
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
       }
       
       if (action.payload.user?.profile_picture || action.payload.profile_picture) {
         localStorage.setItem('profileImage', action.payload.user?.profile_picture || action.payload.profile_picture);
-      } else {
-        localStorage.removeItem('profileImage');
       }
     },
     registerFailure: (state, action) => {
@@ -168,8 +200,10 @@ const authSlice = createSlice({
       state.token = null;
       state.error = null;
       
-      localStorage.removeItem('profileImage');
+      // ИСПРАВЛЕНИЕ: Полная очистка localStorage
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('profileImage');
       delete api.defaults.headers.common['Authorization'];
     },
     clearError: (state) => {
@@ -177,20 +211,51 @@ const authSlice = createSlice({
     },
     updateUserProfile: (state, action) => {
       state.user = { ...state.user, ...action.payload };
+      
+      // Обновляем localStorage
+      localStorage.setItem('user', JSON.stringify(state.user));
+      
       if (action.payload.profile_picture) {
         localStorage.setItem('profileImage', action.payload.profile_picture);
       }
     },
+    // ИСПРАВЛЕНИЕ: Улучшенный updateUser action
+    updateUser: (state, action) => {
+      console.log('🔄 Redux: Обновляем пользователя:', action.payload);
+      state.user = { ...state.user, ...action.payload };
+      
+      // ИСПРАВЛЕНИЕ: Сохраняем обновленного пользователя в localStorage
+      localStorage.setItem('user', JSON.stringify(state.user));
+      
+      // Сохраняем аватарку в localStorage если она есть
+      if (action.payload.profile_image || action.payload.profile_picture) {
+        const imageUrl = action.payload.profile_image || action.payload.profile_picture;
+        localStorage.setItem('profileImage', imageUrl);
+      }
+      
+      console.log('✅ Redux: Пользователь обновлен:', state.user);
+    },
+    // ДОБАВЛЕНИЕ: Action для установки учетных данных
     setCredentials: (state, action) => {
       const { user, token } = action.payload;
       state.user = user;
       state.token = token;
       state.isAuthenticated = true;
       
+      // Сохраняем в localStorage
       if (token) {
         localStorage.setItem('token', token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       }
+      if (user) {
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+    },
+    // ДОБАВЛЕНИЕ: Action для установки пользователя
+    setUser: (state, action) => {
+      state.user = action.payload;
+      state.isAuthenticated = true;
+      localStorage.setItem('user', JSON.stringify(action.payload));
     }
   },
   extraReducers: (builder) => {
@@ -207,6 +272,8 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.error = null;
         
+        // Сохраняем в localStorage
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
         if (action.payload.user?.profile_picture) {
           localStorage.setItem('profileImage', action.payload.user.profile_picture);
         }
@@ -228,6 +295,8 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.error = null;
         
+        // Сохраняем в localStorage
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
         if (action.payload.user?.profile_picture) {
           localStorage.setItem('profileImage', action.payload.user.profile_picture);
         }
@@ -245,6 +314,9 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload.user;
         state.isAuthenticated = true;
+        
+        // Сохраняем в localStorage
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
       })
       .addCase(getProfile.rejected, (state, action) => {
         state.loading = false;
@@ -252,7 +324,10 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
+        
+        // Очищаем localStorage
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         localStorage.removeItem('profileImage');
         delete api.defaults.headers.common['Authorization'];
       })
@@ -266,6 +341,8 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload.user;
         
+        // Сохраняем в localStorage
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
         if (action.payload.user?.profile_picture) {
           localStorage.setItem('profileImage', action.payload.user.profile_picture);
         }
@@ -279,21 +356,29 @@ const authSlice = createSlice({
       .addCase(verifyToken.fulfilled, (state, action) => {
         state.user = action.payload.user;
         state.isAuthenticated = true;
+        
+        // Сохраняем в localStorage
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
       })
       .addCase(verifyToken.rejected, (state) => {
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
+        
+        // Очищаем localStorage
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('profileImage');
       });
   }
 });
 
-// ТОЛЬКО ОДИН экспорт actions
+// ИСПРАВЛЕНИЕ: Добавляем все actions в экспорт
 export const { 
   loginStart, loginSuccess, loginFailure, 
   registerStart, registerSuccess, registerFailure, 
-  logout, clearError, updateUserProfile, setCredentials
+  logout, clearError, updateUserProfile, setCredentials,
+  updateUser, setUser // ДОБАВЛЯЕМ НОВЫЕ ACTIONS
 } = authSlice.actions;
 
-// УБРАЛИ дублирующий export - async thunks уже экспортированы выше
 export default authSlice.reducer;

@@ -26,11 +26,13 @@ const findUserByEmail = async (email) => {
   }
 };
 
-// ДОПОЛНЕНИЕ: Поиск пользователя по username или email
+// Поиск пользователя по username или email
 const findUserByUsernameOrEmail = async (identifier) => {
   try {
-    const query = 'SELECT * FROM users WHERE username = $1 OR email = $1';
-    const result = await pool.query(query, [identifier]);
+    // УЛУЧШЕНИЕ: Приводим к нижнему регистру для email
+    const cleanIdentifier = identifier.trim();
+    const query = 'SELECT * FROM users WHERE username = $1 OR LOWER(email) = LOWER($1)';
+    const result = await pool.query(query, [cleanIdentifier]);
     return result.rows[0];
   } catch (error) {
     console.error('Error finding user by username or email:', error);
@@ -50,10 +52,23 @@ const findUserById = async (id) => {
   }
 };
 
-// ДОПОЛНЕНИЕ: Проверка существования пользователя
+// УЛУЧШЕНИЕ: Поиск пользователя по id с паролем (для смены пароля)
+const findUserByIdWithPassword = async (id) => {
+  try {
+    const query = 'SELECT * FROM users WHERE id = $1';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error finding user by id with password:', error);
+    throw error;
+  }
+};
+
+// Проверка существования пользователя
 const checkUserExists = async (username, email) => {
   try {
-    const query = 'SELECT id FROM users WHERE username = $1 OR email = $2';
+    // УЛУЧШЕНИЕ: Более точная проверка с учетом регистра email
+    const query = 'SELECT id FROM users WHERE username = $1 OR LOWER(email) = LOWER($2)';
     const result = await pool.query(query, [username, email]);
     return result.rows.length > 0;
   } catch (error) {
@@ -62,7 +77,7 @@ const checkUserExists = async (username, email) => {
   }
 };
 
-// ДОПОЛНЕНИЕ: Обновление пользователя
+// Обновление пользователя
 const updateUser = async (id, updates) => {
   try {
     const fields = [];
@@ -82,7 +97,7 @@ const updateUser = async (id, updates) => {
     }
 
     values.push(id);
-    const query = `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING id, username, email, role, created_at`;
+    const query = `UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount} RETURNING id, username, email, role, created_at`;
     
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -92,7 +107,7 @@ const updateUser = async (id, updates) => {
   }
 };
 
-// ДОПОЛНЕНИЕ: Получение статистики пользователя
+// Получение статистики пользователя
 const getUserStats = async (userId) => {
   try {
     const query = `
@@ -102,9 +117,9 @@ const getUserStats = async (userId) => {
         u.email,
         u.role,
         u.created_at,
-        COUNT(DISTINCT l.id) as locations_count,
-        COUNT(DISTINCT r.id) as reviews_count,
-        COUNT(DISTINCT p.id) as photos_count
+        COALESCE(COUNT(DISTINCT l.id), 0) as locations_count,
+        COALESCE(COUNT(DISTINCT r.id), 0) as reviews_count,
+        COALESCE(COUNT(DISTINCT p.id), 0) as photos_count
       FROM users u
       LEFT JOIN locations l ON u.id = l.created_by
       LEFT JOIN reviews r ON u.id = r.user_id
@@ -121,12 +136,53 @@ const getUserStats = async (userId) => {
   }
 };
 
+// ДОПОЛНЕНИЕ: Получение всех пользователей (для админки)
+const getAllUsers = async (limit = 50, offset = 0) => {
+  try {
+    const query = `
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        u.role,
+        u.created_at,
+        COUNT(DISTINCT l.id) as locations_count
+      FROM users u
+      LEFT JOIN locations l ON u.id = l.created_by
+      GROUP BY u.id, u.username, u.email, u.role, u.created_at
+      ORDER BY u.created_at DESC
+      LIMIT $1 OFFSET $2
+    `;
+    
+    const result = await pool.query(query, [limit, offset]);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting all users:', error);
+    throw error;
+  }
+};
+
+// ДОПОЛНЕНИЕ: Удаление пользователя (мягкое удаление)
+const deleteUser = async (id) => {
+  try {
+    const query = 'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id';
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   createUser,
   findUserByEmail,
   findUserByUsernameOrEmail,
   findUserById,
+  findUserByIdWithPassword,
   checkUserExists,
   updateUser,
-  getUserStats
+  getUserStats,
+  getAllUsers,
+  deleteUser
 };
