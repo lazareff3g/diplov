@@ -1,5 +1,5 @@
-// client/src/components/map/MapComponent.js - С ОТЛАДКОЙ
-import React, { useEffect, useRef, useState } from 'react';
+// client/src/components/map/MapComponent.js - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 const MapComponent = ({ 
   center = [55.751244, 37.618423],
@@ -9,28 +9,35 @@ const MapComponent = ({
   selectedLocation,
   interactive = false
 }) => {
-  // 🔍 ДОБАВЛЕНА ОТЛАДКА API КЛЮЧЕЙ:
-  console.log('🔍 DEBUGGING API KEYS:');
-  console.log('Maps API Key:', process.env.REACT_APP_YANDEX_MAPS_API_KEY);
-  console.log('Suggest API Key:', process.env.REACT_APP_YANDEX_SUGGEST_API_KEY);
-  console.log('API URL:', process.env.REACT_APP_API_URL);
-  console.log('All env vars:', process.env);
-
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
   const [placemark, setPlacemark] = useState(null);
+  const [isMapReady, setIsMapReady] = useState(false);
+
+  const handleLocationSelect = useCallback((locationData) => {
+    if (onLocationSelect) {
+      onLocationSelect(locationData);
+    }
+  }, [onLocationSelect]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || isMapReady) return;
 
     const initMap = () => {
       if (!window.ymaps) {
         const script = document.createElement('script');
-        // УПРОЩЕНИЕ: Только основной API без suggest
-        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${process.env.REACT_APP_YANDEX_MAPS_API_KEY}&lang=ru_RU`;
         
-        // 🔍 ОТЛАДКА URL:
-        console.log('🗺️ Loading Yandex Maps with URL:', script.src);
+        // ИСПРАВЛЕНИЕ: Проверяем наличие API ключа
+        const apiKey = process.env.REACT_APP_YANDEX_MAPS_API_KEY;
+        
+        if (!apiKey) {
+          console.error('❌ REACT_APP_YANDEX_MAPS_API_KEY не найден в переменных окружения!');
+          return;
+        }
+        
+        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${apiKey}&lang=ru_RU`;
+        
+        console.log('🗺️ Loading Yandex Maps with API key:', apiKey.substring(0, 10) + '...');
         
         script.onload = () => {
           console.log('✅ Yandex Maps API loaded successfully');
@@ -58,40 +65,52 @@ const MapComponent = ({
         if (interactive) {
           console.log('🔧 Adding interactive features...');
           
-          // ТОЛЬКО встроенный поиск Yandex - он работает без дополнительных API
+          // ИСПРАВЛЕНИЕ: Создаем SearchControl с правильными настройками
           const searchControl = new window.ymaps.control.SearchControl({
             options: {
-              float: 'left',
-              placeholderContent: 'Поиск мест...',
-              maxWidth: [200, 300],
-              noPlacemark: false
+              // Согласно поисковым результатам, используем yandex#search для поиска организаций
+              provider: 'yandex#search',
+              placeholderContent: 'Поиск мест и организаций...',
+              maxWidth: [200, 400],
+              noPlacemark: false,
+              resultsPerPage: 5
             }
           });
           
           mapInstance.controls.add(searchControl);
-          console.log('🔍 Search control added');
+          console.log('🔍 Search control added with provider: yandex#search');
 
-          // Обработчик результатов встроенного поиска
+          // ИСПРАВЛЕНИЕ: Правильная обработка событий поиска согласно документации
           searchControl.events.add('resultselect', (e) => {
-            console.log('🎯 Search result selected');
-            const index = e.get('index');
-            searchControl.getResult(index).then((result) => {
-              const coords = result.geometry.getCoordinates();
-              const address = result.getAddressLine();
-              const name = result.getLocalities().join(', ') || 'Найденное место';
+            try {
+              console.log('🎯 Search result selected');
+              const index = e.get('index');
               
-              console.log('📍 Search result:', { coords, address, name });
-              
-              if (onLocationSelect) {
-                onLocationSelect({
+              searchControl.getResult(index).then((result) => {
+                const coords = result.geometry.getCoordinates();
+                const address = result.getAddressLine();
+                const name = result.properties.get('name') || 
+                            result.getLocalities().join(', ') || 
+                            'Найденное место';
+                
+                console.log('📍 Search result data:', { coords, address, name });
+                
+                handleLocationSelect({
                   coordinates: coords,
                   address: address,
                   name: name
                 });
-              }
-            }).catch((error) => {
-              console.error('❌ Ошибка получения результата поиска:', error);
-            });
+              }).catch((error) => {
+                console.error('❌ Ошибка получения результата поиска:', error);
+              });
+            } catch (error) {
+              console.error('❌ Ошибка обработки результата поиска:', error);
+            }
+          });
+
+          // ИСПРАВЛЕНИЕ: Обработка ошибок поиска
+          searchControl.events.add('error', (e) => {
+            console.error('❌ Search error:', e);
           });
 
           // Обработчик клика по карте
@@ -100,35 +119,16 @@ const MapComponent = ({
             const coords = e.get('coords');
             console.log('📍 Click coordinates:', coords);
             
-            if (onLocationSelect) {
-              // Простое геокодирование
-              window.ymaps.geocode(coords).then((res) => {
-                console.log('🔄 Geocoding result:', res);
-                const firstGeoObject = res.geoObjects.get(0);
-                const address = firstGeoObject ? firstGeoObject.getAddressLine() : '';
-                
-                const locationData = {
-                  coordinates: coords,
-                  address: address || `${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`,
-                  name: 'Выбранная точка'
-                };
-                
-                console.log('📍 Location selected:', locationData);
-                onLocationSelect(locationData);
-              }).catch((error) => {
-                console.error('❌ Geocoding error:', error);
-                const locationData = {
-                  coordinates: coords,
-                  address: `${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`,
-                  name: 'Выбранная точка'
-                };
-                onLocationSelect(locationData);
-              });
-            }
+            handleLocationSelect({
+              coordinates: coords,
+              address: `${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`,
+              name: 'Выбранная точка'
+            });
           });
         }
 
         setMap(mapInstance);
+        setIsMapReady(true);
         console.log('✅ Map created successfully');
       } catch (error) {
         console.error('❌ Ошибка создания карты:', error);
@@ -138,16 +138,15 @@ const MapComponent = ({
     initMap();
 
     return () => {
-      if (map) {
+      if (map && !isMapReady) {
         console.log('🧹 Destroying map...');
         map.destroy();
       }
     };
-  }, [center, zoom, interactive, onLocationSelect]);
+  }, []); // ИСПРАВЛЕНИЕ: Пустой массив зависимостей для предотвращения пересоздания
 
-  // Обновляем метку при изменении selectedLocation
   useEffect(() => {
-    if (map && selectedLocation?.coordinates) {
+    if (map && selectedLocation?.coordinates && isMapReady) {
       console.log('📍 Updating placemark:', selectedLocation);
       
       if (placemark) {
@@ -162,7 +161,7 @@ const MapComponent = ({
         },
         {
           preset: 'islands#redDotIconWithCaption',
-          draggable: interactive
+          draggable: false
         }
       );
 
@@ -172,7 +171,7 @@ const MapComponent = ({
       
       console.log('✅ Placemark updated');
     }
-  }, [map, selectedLocation, interactive, zoom]);
+  }, [map, selectedLocation, isMapReady, zoom]);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -195,7 +194,7 @@ const MapComponent = ({
           color: '#666',
           textAlign: 'center'
         }}>
-          💡 Используйте встроенный поиск Yandex на карте или кликните по карте
+          💡 Используйте поиск на карте для поиска мест и организаций, или кликните по карте
         </div>
       )}
     </div>
