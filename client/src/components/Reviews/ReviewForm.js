@@ -1,10 +1,11 @@
+// client/src/components/Reviews/ReviewForm.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Alert } from 'react-bootstrap';
 import { FaStar } from 'react-icons/fa';
 import reviewService from '../../services/reviewService';
 import './ReviewForm.css';
 
-const ReviewForm = ({ locationId }) => {
+const ReviewForm = ({ locationId, onReviewAdded }) => {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState('');
@@ -17,10 +18,13 @@ const ReviewForm = ({ locationId }) => {
   useEffect(() => {
     const checkUserReview = async () => {
       try {
-        const reviews = await reviewService.getReviewsByLocationId(locationId);
+        // ИСПРАВЛЕНИЕ: Используем правильный метод API
+        const response = await reviewService.getReviewsByLocationId(locationId);
+        const reviews = response.reviews || response; // Поддержка разных форматов ответа
+        
         const currentUser = JSON.parse(localStorage.getItem('user'));
         
-        if (currentUser) {
+        if (currentUser && reviews) {
           const existingReview = reviews.find(review => review.user_id === currentUser.id);
           if (existingReview) {
             setUserReview(existingReview);
@@ -33,7 +37,9 @@ const ReviewForm = ({ locationId }) => {
       }
     };
 
-    checkUserReview();
+    if (locationId) {
+      checkUserReview();
+    }
   }, [locationId]);
 
   // Обработчик отправки формы
@@ -45,33 +51,50 @@ const ReviewForm = ({ locationId }) => {
       return;
     }
 
+    if (!comment.trim()) {
+      setError('Пожалуйста, напишите комментарий');
+      return;
+    }
+
     try {
       setSubmitting(true);
       setError(null);
       
       const reviewData = {
-        location_id: locationId,
-        rating,
-        comment
+        location_id: parseInt(locationId),
+        rating: parseInt(rating),
+        comment: comment.trim()
       };
       
+      let result;
+      
       if (userReview) {
-        // Обновление существующего отзыва
-        await reviewService.updateReview(userReview.id, reviewData);
+        // ИСПРАВЛЕНИЕ: Обновление существующего отзыва (если API поддерживает)
+        result = await reviewService.updateReview(userReview.id, reviewData);
       } else {
         // Создание нового отзыва
-        await reviewService.addReview(reviewData);
+        result = await reviewService.addReview(reviewData);
       }
       
       setSuccess(true);
       
-      // Перезагрузка страницы через 2 секунды для обновления списка отзывов
+      // ИСПРАВЛЕНИЕ: Вызываем callback вместо перезагрузки страницы
+      if (onReviewAdded && result.review) {
+        onReviewAdded(result.review);
+      }
+      
+      // Сбрасываем форму через 2 секунды
       setTimeout(() => {
-        window.location.reload();
+        if (!userReview) {
+          setRating(0);
+          setComment('');
+        }
+        setSuccess(false);
       }, 2000);
+      
     } catch (err) {
       console.error('Ошибка при отправке отзыва:', err);
-      setError(err.response?.data?.error || 'Не удалось отправить отзыв');
+      setError(err.response?.data?.message || err.message || 'Не удалось отправить отзыв');
     } finally {
       setSubmitting(false);
     }
@@ -94,12 +117,13 @@ const ReviewForm = ({ locationId }) => {
                 const ratingValue = index + 1;
                 
                 return (
-                  <label key={index}>
+                  <label key={index} style={{ cursor: 'pointer' }}>
                     <input
                       type="radio"
                       name="rating"
                       value={ratingValue}
                       onClick={() => setRating(ratingValue)}
+                      style={{ display: 'none' }}
                     />
                     <FaStar
                       className="star"
@@ -107,10 +131,14 @@ const ReviewForm = ({ locationId }) => {
                       size={30}
                       onMouseEnter={() => setHover(ratingValue)}
                       onMouseLeave={() => setHover(0)}
+                      style={{ marginRight: '5px', cursor: 'pointer' }}
                     />
                   </label>
                 );
               })}
+              <span className="ms-2">
+                {rating > 0 ? `${rating}/5` : 'Выберите оценку'}
+              </span>
             </div>
           </Form.Group>
           
@@ -122,7 +150,11 @@ const ReviewForm = ({ locationId }) => {
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Поделитесь своими впечатлениями о локации"
+              maxLength={1000}
             />
+            <Form.Text className="text-muted">
+              {comment.length}/1000 символов
+            </Form.Text>
           </Form.Group>
           
           {error && (
@@ -132,7 +164,7 @@ const ReviewForm = ({ locationId }) => {
           <Button 
             variant="primary" 
             type="submit" 
-            disabled={submitting}
+            disabled={submitting || rating === 0 || !comment.trim()}
           >
             {submitting ? 'Отправка...' : (userReview ? 'Обновить отзыв' : 'Отправить отзыв')}
           </Button>

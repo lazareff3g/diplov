@@ -1,14 +1,94 @@
-// routes/locationRoutes.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// routes/locationRoutes.js - ПОЛНАЯ ВЕРСИЯ С РАСШИРЕННЫМИ ПОЛЯМИ
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 
-// Получение всех локаций
-router.get('/', async (req, res) => {
+// ВАЖНО: Специфичные маршруты должны быть ПЕРЕД общими
+// Получение ближайших локаций - ДОБАВЛЕН РОУТ
+router.get('/nearby', async (req, res) => {
   try {
+    const { latitude, longitude, radius = 10 } = req.query;
+    
+    console.log('🔍 Поиск ближайших локаций:', { latitude, longitude, radius });
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        message: 'Необходимы параметры latitude и longitude'
+      });
+    }
+    
     const { pool } = require('../db');
     
-    // ИСПРАВЛЕНИЕ: Используем только существующие столбцы
+    // ИСПРАВЛЕНИЕ: Используем ST_Distance для поиска ближайших локаций
+    const result = await pool.query(`
+      SELECT 
+        id,
+        name,
+        description,
+        ST_X(coordinates) as longitude,
+        ST_Y(coordinates) as latitude,
+        address,
+        category_id,
+        accessibility,
+        best_time_of_day,
+        difficulty_level,
+        tags,
+        -- ДОБАВЛЕНО: расширенные поля
+        photo_type,
+        best_season,
+        lighting_type,
+        camera_angle,
+        transport_type,
+        cost_type,
+        popularity_level,
+        physical_preparation,
+        suitable_for,
+        equipment_needed,
+        parking_available,
+        entrance_fee,
+        created_by,
+        created_at,
+        ST_Distance(
+          coordinates,
+          ST_SetSRID(ST_MakePoint($2, $1), 4326)
+        ) * 111.32 as distance_km
+      FROM locations
+      WHERE ST_DWithin(
+        coordinates,
+        ST_SetSRID(ST_MakePoint($2, $1), 4326),
+        $3 / 111.32
+      )
+      ORDER BY distance_km
+      LIMIT 50
+    `, [latitude, longitude, radius]);
+    
+    console.log('✅ Найдено ближайших локаций:', result.rows.length);
+    
+    res.json({
+      success: true,
+      locations: result.rows,
+      searchCenter: { latitude: parseFloat(latitude), longitude: parseFloat(longitude) },
+      searchRadius: parseFloat(radius)
+    });
+  } catch (error) {
+    console.error('❌ Ошибка поиска ближайших локаций:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Ошибка при поиске ближайших локаций',
+      error: error.message
+    });
+  }
+});
+
+// Получение локаций пользователя
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { pool } = require('../db');
+    
+    console.log('🔍 Поиск локаций пользователя:', userId);
+    
     const result = await pool.query(`
       SELECT 
         id, 
@@ -22,6 +102,74 @@ router.get('/', async (req, res) => {
         best_time_of_day,
         difficulty_level,
         tags,
+        -- ДОБАВЛЕНО: расширенные поля
+        photo_type,
+        best_season,
+        lighting_type,
+        camera_angle,
+        transport_type,
+        cost_type,
+        popularity_level,
+        physical_preparation,
+        suitable_for,
+        equipment_needed,
+        parking_available,
+        entrance_fee,
+        created_by,
+        created_at
+      FROM locations 
+      WHERE created_by = $1
+      ORDER BY created_at DESC
+    `, [userId]);
+    
+    console.log('✅ Найдено локаций пользователя:', result.rows.length);
+    
+    res.json({
+      success: true,
+      locations: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Ошибка получения локаций пользователя:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Ошибка при получении локаций пользователя',
+      error: error.message
+    });
+  }
+});
+
+// Получение всех локаций
+router.get('/', async (req, res) => {
+  try {
+    const { pool } = require('../db');
+    
+    // ИСПРАВЛЕНИЕ: Добавляем все расширенные поля
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        name, 
+        description, 
+        ST_X(coordinates) as longitude,
+        ST_Y(coordinates) as latitude,
+        address,
+        category_id,
+        accessibility,
+        best_time_of_day,
+        difficulty_level,
+        tags,
+        -- ДОБАВЛЕНО: расширенные поля
+        photo_type,
+        best_season,
+        lighting_type,
+        camera_angle,
+        transport_type,
+        cost_type,
+        popularity_level,
+        physical_preparation,
+        suitable_for,
+        equipment_needed,
+        parking_available,
+        entrance_fee,
         created_by,
         created_at
       FROM locations 
@@ -65,6 +213,19 @@ router.get('/:id', async (req, res) => {
         best_time_of_day,
         difficulty_level,
         tags,
+        -- ДОБАВЛЕНО: расширенные поля
+        photo_type,
+        best_season,
+        lighting_type,
+        camera_angle,
+        transport_type,
+        cost_type,
+        popularity_level,
+        physical_preparation,
+        suitable_for,
+        equipment_needed,
+        parking_available,
+        entrance_fee,
         created_by,
         created_at
       FROM locations 
@@ -95,50 +256,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Получение локаций пользователя
-router.get('/user/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { pool } = require('../db');
-    
-    console.log('🔍 Поиск локаций пользователя:', userId);
-    
-    const result = await pool.query(`
-      SELECT 
-        id, 
-        name, 
-        description, 
-        ST_X(coordinates) as longitude,
-        ST_Y(coordinates) as latitude,
-        address,
-        category_id,
-        accessibility,
-        best_time_of_day,
-        difficulty_level,
-        tags,
-        created_by,
-        created_at
-      FROM locations 
-      WHERE created_by = $1
-      ORDER BY created_at DESC
-    `, [userId]);
-    
-    console.log('✅ Найдено локаций пользователя:', result.rows.length);
-    
-    res.json({
-      success: true,
-      locations: result.rows
-    });
-  } catch (error) {
-    console.error('❌ Ошибка получения локаций пользователя:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Ошибка при получении локаций пользователя',
-      error: error.message
-    });
-  }
-});
-
 // Создание новой локации
 router.post('/', protect, async (req, res) => {
   try {
@@ -152,7 +269,20 @@ router.post('/', protect, async (req, res) => {
       accessibility, 
       best_time_of_day, 
       difficulty_level, 
-      tags 
+      tags,
+      // ДОБАВЛЕНО: расширенные поля
+      photo_type,
+      best_season,
+      lighting_type,
+      camera_angle,
+      transport_type,
+      cost_type,
+      popularity_level,
+      physical_preparation,
+      suitable_for,
+      equipment_needed,
+      parking_available,
+      entrance_fee
     } = req.body;
     
     console.log('📝 Создание новой локации для пользователя:', userId);
@@ -178,9 +308,13 @@ router.post('/', protect, async (req, res) => {
     const insertQuery = `
       INSERT INTO locations (
         name, description, coordinates, address, category_id, 
-        accessibility, best_time_of_day, difficulty_level, tags, created_by
+        accessibility, best_time_of_day, difficulty_level, tags, created_by,
+        photo_type, best_season, lighting_type, camera_angle,
+        transport_type, cost_type, popularity_level, physical_preparation,
+        suitable_for, equipment_needed, parking_available, entrance_fee
       ) VALUES (
-        $1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5, $6, $7, $8, $9, $10, $11
+        $1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5, $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
       ) RETURNING 
         id, 
         name, 
@@ -193,6 +327,18 @@ router.post('/', protect, async (req, res) => {
         best_time_of_day,
         difficulty_level,
         tags,
+        photo_type,
+        best_season,
+        lighting_type,
+        camera_angle,
+        transport_type,
+        cost_type,
+        popularity_level,
+        physical_preparation,
+        suitable_for,
+        equipment_needed,
+        parking_available,
+        entrance_fee,
         created_by,
         created_at
     `;
@@ -208,7 +354,20 @@ router.post('/', protect, async (req, res) => {
       best_time_of_day || null,
       difficulty_level || 1,
       tags || null,
-      userId
+      userId,
+      // Расширенные поля
+      photo_type || null,
+      best_season || null,
+      lighting_type || null,
+      camera_angle || null,
+      transport_type || null,
+      cost_type || null,
+      popularity_level || null,
+      physical_preparation || null,
+      suitable_for || null,
+      equipment_needed || null,
+      parking_available || null,
+      entrance_fee || null
     ]);
     
     console.log('✅ Локация создана:', result.rows[0]);
@@ -229,7 +388,7 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// Обновление локации
+// ИСПРАВЛЕНО: Обновление локации с расширенными полями
 router.put('/:id', protect, async (req, res) => {
   try {
     const locationId = req.params.id;
@@ -248,7 +407,20 @@ router.put('/:id', protect, async (req, res) => {
       accessibility, 
       best_time_of_day, 
       difficulty_level, 
-      tags 
+      tags,
+      // ДОБАВЛЕНО: расширенные поля
+      photo_type,
+      best_season,
+      lighting_type,
+      camera_angle,
+      transport_type,
+      cost_type,
+      popularity_level,
+      physical_preparation,
+      suitable_for,
+      equipment_needed,
+      parking_available,
+      entrance_fee
     } = req.body;
     
     // Валидация
@@ -294,7 +466,7 @@ router.put('/:id', protect, async (req, res) => {
       });
     }
     
-    // Обновляем локацию
+    // ИСПРАВЛЕНО: Обновляем локацию с расширенными полями
     const updateQuery = `
       UPDATE locations 
       SET 
@@ -306,8 +478,21 @@ router.put('/:id', protect, async (req, res) => {
         accessibility = $7,
         best_time_of_day = $8,
         difficulty_level = $9,
-        tags = $10
-      WHERE id = $11
+        tags = $10,
+        photo_type = $11,
+        best_season = $12,
+        lighting_type = $13,
+        camera_angle = $14,
+        transport_type = $15,
+        cost_type = $16,
+        popularity_level = $17,
+        physical_preparation = $18,
+        suitable_for = $19,
+        equipment_needed = $20,
+        parking_available = $21,
+        entrance_fee = $22,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $23
       RETURNING 
         id, 
         name, 
@@ -320,6 +505,18 @@ router.put('/:id', protect, async (req, res) => {
         best_time_of_day,
         difficulty_level,
         tags,
+        photo_type,
+        best_season,
+        lighting_type,
+        camera_angle,
+        transport_type,
+        cost_type,
+        popularity_level,
+        physical_preparation,
+        suitable_for,
+        equipment_needed,
+        parking_available,
+        entrance_fee,
         created_by,
         created_at
     `;
@@ -335,6 +532,19 @@ router.put('/:id', protect, async (req, res) => {
       best_time_of_day || null,
       difficulty_level || 1,
       tags || null,
+      // Расширенные поля
+      photo_type || null,
+      best_season || null,
+      lighting_type || null,
+      camera_angle || null,
+      transport_type || null,
+      cost_type || null,
+      popularity_level || null,
+      physical_preparation || null,
+      suitable_for || null,
+      equipment_needed || null,
+      parking_available || null,
+      entrance_fee || null,
       locationId
     ]);
     

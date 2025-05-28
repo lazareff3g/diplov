@@ -1,4 +1,4 @@
-// client/src/components/map/MapComponent.js - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
+// client/src/components/map/MapComponent.js - ПОЛНАЯ ВЕРСИЯ С ПОДДЕРЖКОЙ МНОЖЕСТВЕННЫХ ЛОКАЦИЙ
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 const MapComponent = ({ 
@@ -7,11 +7,16 @@ const MapComponent = ({
   height = '400px',
   onLocationSelect,
   selectedLocation,
-  interactive = false
+  interactive = false,
+  // ДОБАВЛЕНО: Поддержка множественных локаций
+  locations = [],
+  userLocation = null
 }) => {
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
   const [placemark, setPlacemark] = useState(null);
+  const [objectManager, setObjectManager] = useState(null);
+  const [userPlacemark, setUserPlacemark] = useState(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
   const handleLocationSelect = useCallback((locationData) => {
@@ -20,6 +25,67 @@ const MapComponent = ({
     }
   }, [onLocationSelect]);
 
+  // ДОБАВЛЕНО: Создание GeoJSON для множественных локаций
+  const createGeoJSON = useCallback(() => {
+    console.log('🔍 Создаем GeoJSON для локаций:', locations.length);
+    
+    if (!Array.isArray(locations) || locations.length === 0) {
+      console.log('⚠️ Нет локаций для отображения');
+      return {
+        type: "FeatureCollection",
+        features: []
+      };
+    }
+
+    const features = locations.map((location, index) => {
+      // ИСПРАВЛЕНО: Правильный порядок координат для Yandex Maps
+      const lat = parseFloat(location.latitude);
+      const lng = parseFloat(location.longitude);
+      
+      console.log(`📍 Локация ${location.name}: lat=${lat}, lng=${lng}`);
+      
+      // ПРОВЕРКА: Валидные ли координаты
+      if (isNaN(lat) || isNaN(lng)) {
+        console.error(`❌ Неверные координаты для локации ${location.name}:`, { lat, lng });
+        return null;
+      }
+      
+      return {
+        type: "Feature",
+        id: location.id || index,
+        geometry: {
+          type: "Point",
+          // ИСПРАВЛЕНО: Для Yandex Maps порядок [широта, долгота]
+          coordinates: [lat, lng]
+        },
+        properties: {
+          balloonContent: `
+            <div style="padding: 10px; max-width: 250px;">
+              <h5>${location.name}</h5>
+              <p>${location.description || 'Описание не указано'}</p>
+              <p><strong>Адрес:</strong> ${location.address || 'Не указан'}</p>
+              ${location.distance_km ? `<p><strong>Расстояние:</strong> ${location.distance_km.toFixed(1)} км</p>` : ''}
+              <a href="/locations/${location.id}" style="color: #007bff;">Подробнее →</a>
+            </div>
+          `,
+          clusterCaption: location.name,
+          hintContent: location.name
+        },
+        options: {
+          preset: 'islands#redDotIcon'
+        }
+      };
+    }).filter(feature => feature !== null); // Убираем null значения
+
+    console.log('✅ Создано features:', features.length);
+    
+    return {
+      type: "FeatureCollection",
+      features: features
+    };
+  }, [locations]);
+
+  // Инициализация карты
   useEffect(() => {
     if (!mapRef.current || isMapReady) return;
 
@@ -35,7 +101,7 @@ const MapComponent = ({
           return;
         }
         
-        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${apiKey}&lang=ru_RU`;
+        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${apiKey}&lang=ru_RU&coordorder=latlong`;
         
         console.log('🗺️ Loading Yandex Maps with API key:', apiKey.substring(0, 10) + '...');
         
@@ -60,6 +126,30 @@ const MapComponent = ({
           center: center,
           zoom: zoom,
           controls: ['zoomControl', 'geolocationControl']
+        });
+
+        // ДОБАВЛЕНО: Создаем ObjectManager для множественных точек
+        const objectManagerInstance = new window.ymaps.ObjectManager({
+          clusterize: true,
+          gridSize: 64,
+          clusterDisableClickZoom: false
+        });
+
+        // Добавляем ObjectManager на карту
+        mapInstance.geoObjects.add(objectManagerInstance);
+
+        // ДОБАВЛЕНО: Обработчик клика по объекту в ObjectManager
+        objectManagerInstance.objects.events.add('click', (e) => {
+          const objectId = e.get('objectId');
+          const object = objectManagerInstance.objects.getById(objectId);
+          
+          if (object && handleLocationSelect) {
+            console.log('🎯 Clicked on location object:', object);
+            handleLocationSelect({
+              coordinates: object.geometry.coordinates,
+              properties: object.properties
+            });
+          }
         });
 
         if (interactive) {
@@ -128,6 +218,7 @@ const MapComponent = ({
         }
 
         setMap(mapInstance);
+        setObjectManager(objectManagerInstance);
         setIsMapReady(true);
         console.log('✅ Map created successfully');
       } catch (error) {
@@ -145,9 +236,84 @@ const MapComponent = ({
     };
   }, []); // ИСПРАВЛЕНИЕ: Пустой массив зависимостей для предотвращения пересоздания
 
+  // ДОБАВЛЕНО: Обновление множественных точек на карте
   useEffect(() => {
-    if (map && selectedLocation?.coordinates && isMapReady) {
-      console.log('📍 Updating placemark:', selectedLocation);
+    if (!objectManager || !isMapReady) {
+      console.log('⏳ Карта еще не готова для добавления точек');
+      return;
+    }
+
+    console.log('🔄 Обновляем точки на карте. Локаций:', locations.length);
+
+    // Очищаем старые точки
+    objectManager.removeAll();
+
+    if (locations.length === 0) {
+      console.log('⚠️ Нет локаций для отображения');
+      return;
+    }
+
+    // Создаем и добавляем новые точки
+    const geoJSON = createGeoJSON();
+    
+    if (geoJSON.features.length > 0) {
+      objectManager.add(geoJSON);
+      console.log('✅ Добавлено точек на карту:', geoJSON.features.length);
+      
+      // Подгоняем карту под все точки
+      if (map && geoJSON.features.length > 1) {
+        const bounds = objectManager.getBounds();
+        if (bounds) {
+          map.setBounds(bounds, { 
+            checkZoomRange: true,
+            zoomMargin: 50
+          });
+        }
+      }
+    } else {
+      console.log('⚠️ Нет валидных точек для отображения');
+    }
+
+  }, [objectManager, locations, isMapReady, map, createGeoJSON]);
+
+  // ДОБАВЛЕНО: Обновление метки пользователя
+  useEffect(() => {
+    if (!map || !userLocation || !isMapReady) return;
+
+    console.log('👤 Добавляем метку пользователя:', userLocation);
+
+    // Удаляем старую метку пользователя
+    if (userPlacemark) {
+      map.geoObjects.remove(userPlacemark);
+    }
+
+    // Создаем новую метку пользователя
+    const newUserPlacemark = new window.ymaps.Placemark(
+      [userLocation.latitude, userLocation.longitude],
+      {
+        balloonContent: 'Ваше местоположение',
+        hintContent: 'Вы здесь'
+      },
+      {
+        preset: 'islands#blueCircleDotIcon'
+      }
+    );
+
+    map.geoObjects.add(newUserPlacemark);
+    setUserPlacemark(newUserPlacemark);
+
+    // Очистка при размонтировании
+    return () => {
+      if (map && newUserPlacemark) {
+        map.geoObjects.remove(newUserPlacemark);
+      }
+    };
+  }, [map, userLocation, isMapReady]);
+
+  // Обновление одиночной метки (для AddLocationPage)
+  useEffect(() => {
+    if (map && selectedLocation?.coordinates && isMapReady && !locations.length) {
+      console.log('📍 Updating single placemark:', selectedLocation);
       
       if (placemark) {
         map.geoObjects.remove(placemark);
@@ -169,9 +335,9 @@ const MapComponent = ({
       setPlacemark(newPlacemark);
       map.setCenter(selectedLocation.coordinates, Math.max(zoom, 15));
       
-      console.log('✅ Placemark updated');
+      console.log('✅ Single placemark updated');
     }
-  }, [map, selectedLocation, isMapReady, zoom]);
+  }, [map, selectedLocation, isMapReady, zoom, locations.length]);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -195,6 +361,19 @@ const MapComponent = ({
           textAlign: 'center'
         }}>
           💡 Используйте поиск на карте для поиска мест и организаций, или кликните по карте
+        </div>
+      )}
+
+      {/* ДОБАВЛЕНО: Информация о локациях */}
+      {locations.length > 0 && (
+        <div style={{
+          marginTop: '8px',
+          fontSize: '12px',
+          color: '#666',
+          textAlign: 'center'
+        }}>
+          📍 Отображено локаций: {locations.length}
+          {userLocation && ' | 👤 Ваше местоположение отмечено синим'}
         </div>
       )}
     </div>

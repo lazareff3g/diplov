@@ -1,73 +1,104 @@
-// client/src/pages/NearbyLocationsPage.js
+// client/src/pages/NearbyLocationsPage.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Button, Alert, Spinner, Form } from 'react-bootstrap';
-import { YMaps, Map, Placemark, Clusterer } from '@pbe/react-yandex-maps';
-import LocationList from '../components/locations/LocationList';
+import { Container, Row, Col, Card, Button, Form, Alert, Spinner } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import { FaMapMarkerAlt, FaSearch, FaLocationArrow } from 'react-icons/fa';
 import api from '../services/api';
+import MapComponent from '../components/map/MapComponent';
 
 const NearbyLocationsPage = () => {
+  const navigate = useNavigate();
+  
+  // ИСПРАВЛЕНО: Инициализируем locations как пустой массив
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
   const [userLocation, setUserLocation] = useState(null);
-  const [radius, setRadius] = useState(10);
+  const [searchRadius, setSearchRadius] = useState(10);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
-  // Безопасная функция для обработки distance
-  const safeDistance = (distance) => {
-    if (typeof distance === 'number') {
-      return distance.toFixed(1);
+  // Получение геолокации пользователя
+  const getCurrentLocation = () => {
+    setGettingLocation(true);
+    setError('');
+
+    if (!navigator.geolocation) {
+      setError('Геолокация не поддерживается вашим браузером');
+      setGettingLocation(false);
+      return;
     }
-    if (typeof distance === 'string') {
-      const num = parseFloat(distance);
-      return isNaN(num) ? '0.0' : num;
-    }
-    return '0.0';
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ latitude, longitude });
+        setGettingLocation(false);
+        console.log('✅ Геолокация получена:', { latitude, longitude });
+        
+        // Автоматически ищем локации после получения координат
+        searchNearbyLocations(latitude, longitude, searchRadius);
+      },
+      (error) => {
+        console.error('❌ Ошибка геолокации:', error);
+        setGettingLocation(false);
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setError('Доступ к геолокации запрещен. Разрешите доступ к местоположению.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setError('Информация о местоположении недоступна.');
+            break;
+          case error.TIMEOUT:
+            setError('Время ожидания определения местоположения истекло.');
+            break;
+          default:
+            setError('Произошла неизвестная ошибка при определении местоположения.');
+            break;
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000 // 5 минут
+      }
+    );
   };
 
-  // Получение текущего местоположения пользователя
-  useEffect(() => {
-    if (navigator.geolocation) {
-      setLoading(true);
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setUserLocation({ latitude, longitude });
-          fetchNearbyLocations(latitude, longitude, radius);
-        },
-        (error) => {
-          console.error('Ошибка получения геолокации:', error);
-          setError('Не удалось определить ваше местоположение. Разрешите доступ к геолокации.');
-          setLoading(false);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        }
-      );
-    } else {
-      setError('Геолокация не поддерживается вашим браузером');
-    }
-  }, []);
-
   // Поиск ближайших локаций
-  const fetchNearbyLocations = async (latitude, longitude, searchRadius) => {
+  const searchNearbyLocations = async (lat, lng, radius) => {
     try {
       setLoading(true);
-      setError(null);
+      setError('');
+      
+      console.log('🔍 Поиск ближайших локаций:', { lat, lng, radius });
       
       const response = await api.get('/locations/nearby', {
         params: {
-          latitude,
-          longitude,
-          radius: searchRadius
+          latitude: lat,
+          longitude: lng,
+          radius: radius
         }
       });
       
-      setLocations(response.data);
+      console.log('📍 Ответ от сервера:', response.data);
+      
+      if (response.data.success) {
+        // ИСПРАВЛЕНО: Проверяем что locations является массивом
+        const nearbyLocations = Array.isArray(response.data.locations) 
+          ? response.data.locations 
+          : [];
+          
+        setLocations(nearbyLocations);
+        console.log('✅ Найдено ближайших локаций:', nearbyLocations.length);
+      } else {
+        throw new Error(response.data.message || 'Ошибка поиска локаций');
+      }
+      
     } catch (err) {
-      console.error('Ошибка при поиске ближайших локаций:', err);
-      setError('Не удалось найти ближайшие локации');
+      console.error('❌ Ошибка поиска ближайших локаций:', err);
+      setError(err.response?.data?.message || err.message || 'Ошибка при поиске ближайших локаций');
+      // ИСПРАВЛЕНО: При ошибке устанавливаем пустой массив
       setLocations([]);
     } finally {
       setLoading(false);
@@ -76,154 +107,218 @@ const NearbyLocationsPage = () => {
 
   // Обработчик изменения радиуса поиска
   const handleRadiusChange = (newRadius) => {
-    setRadius(newRadius);
+    setSearchRadius(newRadius);
+    
     if (userLocation) {
-      fetchNearbyLocations(userLocation.latitude, userLocation.longitude, newRadius);
+      searchNearbyLocations(userLocation.latitude, userLocation.longitude, newRadius);
+    }
+  };
+
+  // Обработчик клика по локации на карте
+  const handleLocationSelect = (locationData) => {
+    // Находим локацию по координатам
+    const foundLocation = locations.find(loc => 
+      Math.abs(loc.latitude - locationData.coordinates[0]) < 0.001 &&
+      Math.abs(loc.longitude - locationData.coordinates[1]) < 0.001
+    );
+    
+    if (foundLocation) {
+      navigate(`/locations/${foundLocation.id}`);
     }
   };
 
   return (
     <Container className="py-4">
-      <h1 className="mb-4">🗺️ Локации поблизости</h1>
-      
-      {/* Контролы радиуса поиска */}
+      {/* ЗАГОЛОВОК */}
       <Row className="mb-4">
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label>Радиус поиска: {radius} км</Form.Label>
-            <Form.Range
-              min={1}
-              max={50}
-              value={radius}
-              onChange={(e) => handleRadiusChange(parseInt(e.target.value))}
-            />
-            <div className="d-flex justify-content-between">
-              <small>1 км</small>
-              <small>50 км</small>
-            </div>
-          </Form.Group>
-        </Col>
-        <Col md={6} className="d-flex align-items-end">
-          <Button 
-            variant="outline-primary"
-            onClick={() => userLocation && fetchNearbyLocations(userLocation.latitude, userLocation.longitude, radius)}
-            disabled={!userLocation || loading}
-          >
-            🔄 Обновить поиск
-          </Button>
+        <Col>
+          <h1>
+            <FaLocationArrow className="me-2 text-primary" />
+            Ближайшие локации
+          </h1>
+          <p className="text-muted">
+            Найдите интересные места для фотосъемки рядом с вами
+          </p>
         </Col>
       </Row>
 
-      {/* Сообщения об ошибках */}
+      {/* УПРАВЛЕНИЕ ПОИСКОМ */}
+      <Card className="mb-4">
+        <Card.Header>
+          <h5 className="mb-0">🎯 Настройки поиска</h5>
+        </Card.Header>
+        <Card.Body>
+          <Row className="align-items-end">
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Радиус поиска</Form.Label>
+                <Form.Select 
+                  value={searchRadius} 
+                  onChange={(e) => handleRadiusChange(parseInt(e.target.value))}
+                >
+                  <option value={1}>1 км</option>
+                  <option value={5}>5 км</option>
+                  <option value={10}>10 км</option>
+                  <option value={25}>25 км</option>
+                  <option value={50}>50 км</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            
+            <Col md={4}>
+              <Button 
+                variant="primary" 
+                onClick={getCurrentLocation}
+                disabled={gettingLocation}
+                className="w-100"
+              >
+                {gettingLocation ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Определение местоположения...
+                  </>
+                ) : (
+                  <>
+                    <FaLocationArrow className="me-2" />
+                    Найти мое местоположение
+                  </>
+                )}
+              </Button>
+            </Col>
+            
+            <Col md={4}>
+              {userLocation && (
+                <div className="text-success">
+                  <small>
+                    ✅ Местоположение определено
+                    <br />
+                    📍 {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+                  </small>
+                </div>
+              )}
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {/* ОШИБКИ */}
       {error && (
         <Alert variant="danger" className="mb-4">
-          {error}
+          <Alert.Heading>Ошибка</Alert.Heading>
+          <p>{error}</p>
         </Alert>
       )}
 
-      {/* Карта с локациями поблизости */}
-      {userLocation && (
-        <Row className="mb-4">
-          <Col md={12}>
-            <div style={{ 
-              width: '100%', 
-              height: '500px', 
-              border: '1px solid #ddd', 
-              borderRadius: '8px', 
-              overflow: 'hidden' 
-            }}>
-              <YMaps>
-                <Map
-                  defaultState={{ 
-                    center: [userLocation.latitude, userLocation.longitude], 
-                    zoom: 12 
-                  }}
-                  style={{ width: '100%', height: '100%' }}
-                  options={{
-                    suppressMapOpenBlock: true,
-                    autoFitToViewport: 'always'
-                  }}
-                >
-                  {/* Кластеризация меток */}
-                  <Clusterer
-                    options={{
-                      preset: 'islands#invertedVioletClusterIcons',
-                      groupByCoordinates: false,
-                    }}
-                  >
-                    {/* Метка текущего местоположения */}
-                    <Placemark
-                      geometry={[userLocation.latitude, userLocation.longitude]}
-                      properties={{
-                        balloonContent: 'Ваше местоположение',
-                        hintContent: 'Вы здесь'
-                      }}
-                      options={{
-                        preset: 'islands#geolocationIcon',
-                        iconColor: '#0077ff'
-                      }}
-                    />
-                    
-                    {/* Метки найденных локаций с ИСПРАВЛЕННОЙ обработкой distance */}
-                    {locations.map((location) => (
-                      <Placemark
-                        key={location.id}
-                        geometry={[location.latitude, location.longitude]}
-                        properties={{
-                          balloonContent: `
-                            <div style="max-width: 300px;">
-                              <h4>${location.name}</h4>
-                              <p>${location.description ? location.description.substring(0, 100) + '...' : ''}</p>
-                              <p><strong>Расстояние:</strong> ${safeDistance(location.distance)} км</p>
-                              <a href="/locations/${location.id}" target="_blank">Подробнее</a>
-                            </div>
-                          `,
-                          hintContent: location.name
-                        }}
-                        options={{
-                          preset: 'islands#violetIcon'
-                        }}
-                      />
-                    ))}
-                  </Clusterer>
-                </Map>
-              </YMaps>
-            </div>
-          </Col>
-        </Row>
-      )}
-
-      {/* Список найденных локаций */}
-      <Row>
-        <Col md={12}>
-          {loading ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" role="status">
-                <span className="visually-hidden">Поиск локаций...</span>
-              </Spinner>
-              <p className="mt-3 text-muted">Ищем локации поблизости...</p>
-            </div>
-          ) : locations.length === 0 ? (
-            <Alert variant="info">
-              <Alert.Heading>Локации не найдены</Alert.Heading>
-              <p>В радиусе {radius} км от вашего местоположения не найдено интересных мест для фотографии.</p>
-              <hr />
-              <p className="mb-0">
-                💡 <strong>Попробуйте:</strong> Увеличить радиус поиска или проверить настройки геолокации.
-              </p>
-            </Alert>
-          ) : (
-            <>
-              <h3>Найдено локаций: {locations.length}</h3>
-              <LocationList 
-                locations={locations}
-                loading={false}
-                error={null}
-              />
-            </>
+      {/* РЕЗУЛЬТАТЫ ПОИСКА */}
+      {loading ? (
+        <div className="text-center py-5">
+          <Spinner animation="border" variant="primary" />
+          <p className="mt-3">Поиск ближайших локаций...</p>
+        </div>
+      ) : (
+        <>
+          {/* СТАТИСТИКА */}
+          {userLocation && (
+            <Row className="mb-4">
+              <Col>
+                <Alert variant="info">
+                  <h6 className="mb-2">📊 Результаты поиска</h6>
+                  <p className="mb-0">
+                    Найдено <strong>{locations.length}</strong> локаций 
+                    в радиусе <strong>{searchRadius} км</strong> от вашего местоположения
+                  </p>
+                </Alert>
+              </Col>
+            </Row>
           )}
-        </Col>
-      </Row>
+
+          {/* КАРТА */}
+          {userLocation && (
+            <Row className="mb-4">
+              <Col>
+                <Card>
+                  <Card.Header>
+                    <h5 className="mb-0">🗺️ Карта ближайших локаций</h5>
+                  </Card.Header>
+                  <Card.Body style={{ padding: 0 }}>
+                    <MapComponent
+                      center={[userLocation.latitude, userLocation.longitude]}
+                      zoom={12}
+                      height="500px"
+                      locations={locations}
+                      userLocation={userLocation}
+                      onLocationSelect={handleLocationSelect}
+                      interactive={true}
+                    />
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          )}
+
+          {/* СПИСОК ЛОКАЦИЙ */}
+          <Row>
+            <Col>
+              <h4>📋 Список ближайших локаций</h4>
+              
+              {/* ИСПРАВЛЕНО: Проверяем что locations является массивом перед использованием map */}
+              {Array.isArray(locations) && locations.length === 0 ? (
+                <Alert variant="info">
+                  <Alert.Heading>Локации не найдены</Alert.Heading>
+                  <p>
+                    {userLocation 
+                      ? 'В указанном радиусе не найдено локаций для фотосъемки. Попробуйте увеличить радиус поиска.'
+                      : 'Сначала определите ваше местоположение для поиска ближайших локаций.'
+                    }
+                  </p>
+                </Alert>
+              ) : (
+                <Row>
+                  {/* ИСПРАВЛЕНО: Безопасное использование map с проверкой */}
+                  {Array.isArray(locations) && locations.map((location) => (
+                    <Col md={6} lg={4} key={location.id} className="mb-4">
+                      <Card className="h-100">
+                        <Card.Body>
+                          <Card.Title>{location.name}</Card.Title>
+                          <Card.Text>
+                            {location.description ? 
+                              location.description.substring(0, 100) + '...' : 
+                              'Описание не указано'
+                            }
+                          </Card.Text>
+                          
+                          <div className="mb-2">
+                            <small className="text-muted">
+                              <FaMapMarkerAlt className="me-1 text-danger" />
+                              {location.address || 'Адрес не указан'}
+                            </small>
+                          </div>
+                          
+                          {location.distance_km && (
+                            <div className="mb-2">
+                              <small className="text-primary">
+                                📏 Расстояние: {location.distance_km.toFixed(1)} км
+                              </small>
+                            </div>
+                          )}
+                          
+                          <Button 
+                            variant="primary" 
+                            className="w-100"
+                            onClick={() => navigate(`/locations/${location.id}`)}
+                          >
+                            Подробнее
+                          </Button>
+                        </Card.Body>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              )}
+            </Col>
+          </Row>
+        </>
+      )}
     </Container>
   );
 };

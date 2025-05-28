@@ -1,9 +1,11 @@
+// client/src/services/photoService.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import api from './api';
 
 const photoService = {
   // Получение фотографий для конкретной локации
   getPhotosByLocationId: async (locationId) => {
-    const response = await api.get(`/locations/${locationId}/photos`);
+    // ИСПРАВЛЕНИЕ: Правильный URL согласно backend роуту
+    const response = await api.get(`/photos/location/${locationId}`);
     return response.data;
   },
   
